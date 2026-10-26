@@ -11840,8 +11840,9 @@ window.SoH = window.SoH || {};
       drawGeoLoadingBanner();
     }
 
-    // 5. Strategic Neighbor Connections for Selected / Active City
+    // 5. Strategic Neighbor Connections for Selected / Active City & HoI4 Frontlines
     drawStrategicConnections(selectedId, armySourceId);
+    drawFrontlines(provinces, pulse);
 
     // 6. Army Move Target Reticles & Smooth Curved Bezier Preview Arrow
     if (armySourceProv && Array.isArray(armySourceProv.neighbors)) {
@@ -11980,15 +11981,18 @@ window.SoH = window.SoH || {};
     ctx.lineCap = 'round';
 
     const isGoogleEarthMode = basemapStyle === 'earth_hybrid' || basemapStyle === 'satellite' || basemapStyle === 'terrain';
-    // 40% - 60% Translucent Grand Strategy Political Fill (as requested: %40-%60 opaklık)
-    const baseFillAlpha =
-      basemapStyle === 'satellite'
-        ? 0.42
-        : basemapStyle === 'earth_hybrid'
-        ? 0.48
-        : basemapStyle === 'terrain'
-        ? 0.52
-        : 0.56;
+    // Opaque Sovereign Borders (Studio Rule #2): Solid opaque colors in political/HoI4 mode (alpha >= 0.94)
+    let baseFillAlpha = 0.95;
+    if (basemapStyle === 'satellite') {
+      baseFillAlpha = (mapMode === 'political') ? 0.92 : 0.45;
+    } else if (basemapStyle === 'earth_hybrid') {
+      baseFillAlpha = (mapMode === 'political') ? 0.94 : 0.52;
+    } else if (basemapStyle === 'terrain') {
+      baseFillAlpha = (mapMode === 'political') ? 0.94 : 0.58;
+    } else {
+      // 'dark' or standard political grand strategy map
+      baseFillAlpha = 0.96;
+    }
 
     const zoomScale = Math.pow(worldCam.zoom, 0.48);
     const highlightedRings = [];
@@ -12016,24 +12020,24 @@ window.SoH = window.SoH || {};
           const ownerCfg = getNationConfig(currentOwner);
           const fillColor = getCityMapModeColor(linkedProv, mapMode);
 
-          // 1. Vibrant/Pastel Translucent Fill (42% - 62% opacity) via GPU-cached Path2D
+          // 1. Vibrant Solid Opaque Sovereign Fill (alpha >= 0.94) via GPU-cached Path2D
           ctx.globalAlpha = (isCountrySelected || isCountryHovered)
-            ? Math.min(0.64, baseFillAlpha + 0.12)
+            ? Math.min(1.0, baseFillAlpha + 0.04)
             : baseFillAlpha;
           ctx.fillStyle = fillColor;
           ctx.fill(path2d);
 
-          // 2. Crisp Outer Dark Separation Line + Bright Inner Sovereign Border
-          ctx.globalAlpha = 0.82;
-          ctx.lineWidth = 1.9 / zoomScale;
-          ctx.strokeStyle = '#040914';
+          // 2. Crisp Outer Dark Separation Line + Thick Sovereign Border
+          ctx.globalAlpha = 0.92;
+          ctx.lineWidth = 2.4 / zoomScale;
+          ctx.strokeStyle = '#040814';
           ctx.stroke(path2d);
 
           const atWar = isNationAtWarWithPlayer(currentOwner);
-          ctx.globalAlpha = 0.92;
-          ctx.lineWidth = (atWar ? (1.8 + pulse * 0.7) : 1.15) / zoomScale;
+          ctx.globalAlpha = 1.0;
+          ctx.lineWidth = (atWar ? (2.6 + pulse * 0.8) : 1.6) / zoomScale;
           ctx.strokeStyle = atWar
-            ? '#f87171'
+            ? '#ef4444'
             : (ownerCfg.borderColor || '#f8fafc');
           ctx.stroke(path2d);
 
@@ -12045,18 +12049,18 @@ window.SoH = window.SoH || {};
             });
           }
         } else {
-          // Unmapped minor countries: vibrant pastel translucent fill (never dark/black shadow!)
-          ctx.globalAlpha = baseFillAlpha * 0.78;
+          // Unmapped minor countries: vibrant solid/pastel sovereign fill (never dark/black shadow!)
+          ctx.globalAlpha = baseFillAlpha * 0.88;
           ctx.fillStyle = gf.pastelColor || '#38bdf8';
           ctx.fill(path2d);
 
-          ctx.globalAlpha = 0.75;
-          ctx.lineWidth = 1.4 / zoomScale;
-          ctx.strokeStyle = '#040914';
+          ctx.globalAlpha = 0.85;
+          ctx.lineWidth = 1.8 / zoomScale;
+          ctx.strokeStyle = '#040814';
           ctx.stroke(path2d);
 
-          ctx.globalAlpha = 0.70;
-          ctx.lineWidth = 0.85 / zoomScale;
+          ctx.globalAlpha = 0.80;
+          ctx.lineWidth = 1.1 / zoomScale;
           ctx.strokeStyle = gf.pastelBorder || '#bae6fd';
           ctx.stroke(path2d);
         }
@@ -12092,6 +12096,72 @@ window.SoH = window.SoH || {};
       }
     }
 
+    ctx.restore();
+  }
+
+  // ============================================================================
+  // HOI4 ACTIVE FRONTLINES (Cephe Hatları)
+  // Renders distinct pulsing dashed barbed frontlines between nations at war
+  // ============================================================================
+  function drawFrontlines(provinces, pulse) {
+    if (!provinces || !provinces.length) return;
+    const drawnPairs = new Set();
+    const zScale = Math.pow(worldCam.zoom, 0.45);
+    const s = SoH.state;
+    if (!s || !s.nations) return;
+
+    ctx.save();
+    for (let i = 0; i < provinces.length; i++) {
+      const p1 = provinces[i];
+      if (!Array.isArray(p1.neighbors)) continue;
+      const n1 = p1.owner;
+      const n1State = s.nations[n1];
+      if (!n1State || !Array.isArray(n1State.atWarWith) || !n1State.atWarWith.length) continue;
+
+      for (let j = 0; j < p1.neighbors.length; j++) {
+        const p2Id = p1.neighbors[j];
+        const p2 = getProvince(p2Id);
+        if (!p2) continue;
+        const n2 = p2.owner;
+        if (n1 === n2) continue;
+
+        const pairKey = p1.id < p2.id ? `${p1.id}_${p2.id}` : `${p2.id}_${p1.id}`;
+        if (drawnPairs.has(pairKey)) continue;
+        drawnPairs.add(pairKey);
+
+        const atWar = n1State.atWarWith.includes(n2);
+        if (!atWar) continue;
+
+        const c1 = getProvCenterXY(p1);
+        const c2 = getProvCenterXY(p2);
+
+        const mx = (c1.x + c2.x) / 2;
+        const my = (c1.y + c2.y) / 2;
+        const dx = c2.x - c1.x;
+        const dy = c2.y - c1.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const nx = -dy / dist;
+        const ny = dx / dist;
+
+        // Frontline barbed line perpendicular to connection
+        const span = clamp(dist * 0.45, 14, 45);
+        ctx.beginPath();
+        ctx.moveTo(mx - nx * span, my - ny * span);
+        ctx.lineTo(mx + nx * span, my + ny * span);
+        ctx.strokeStyle = `rgba(239, 68, 68, ${0.75 + pulse * 0.25})`;
+        ctx.lineWidth = 2.6 / zScale;
+        ctx.setLineDash([5 / zScale, 4 / zScale]);
+        ctx.lineDashOffset = -elapsed * 14;
+        ctx.stroke();
+
+        // Frontline combat swords badge
+        const swordScale = clamp(1 / zScale, 0.5, 1.0);
+        ctx.font = `${Math.round(9 * swordScale)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚔️', mx, my);
+      }
+    }
     ctx.restore();
   }
 
@@ -12183,63 +12253,74 @@ window.SoH = window.SoH || {};
         groups[p.owner].push(p);
       }
 
-      const bannerAlpha = z < 1.38
+      const bannerAlpha = z < 1.35
         ? 0.94
-        : z < 2.25
-        ? 0.68
-        : clamp(0.68 - (z - 2.25) * 0.55, 0.18, 0.68);
+        : z < 1.80
+        ? 0.40
+        : clamp(0.35 - (z - 1.80) * 0.40, 0.0, 0.35);
 
-      const ownerIds = Object.keys(groups);
-      for (let i = 0; i < ownerIds.length; i++) {
-        const ownerId = ownerIds[i];
-        const list = groups[ownerId];
-        if (!list || !list.length) continue;
-        const nCfg = getNationConfig(ownerId);
+      if (bannerAlpha > 0.02) {
+        const ownerIds = Object.keys(groups);
+        for (let i = 0; i < ownerIds.length; i++) {
+          const ownerId = ownerIds[i];
+          const list = groups[ownerId];
+          if (!list || !list.length) continue;
+          const nCfg = getNationConfig(ownerId);
 
-        let sumX = 0, sumY = 0, count = 0;
-        for (let j = 0; j < list.length; j++) {
-          // Exclude distant island outliers from shifting mainland country title
-          if (ownerId === 'turkiye' && (list[j].id === 'tr_kibris' || list[j].id === 'tr_girne')) continue;
-          const c = getProvCenterXY(list[j]);
-          sumX += c.x;
-          sumY += c.y;
-          count++;
+          let sumX = 0, sumY = 0, count = 0;
+          for (let j = 0; j < list.length; j++) {
+            // Exclude distant island outliers from shifting mainland country title
+            if (ownerId === 'turkiye' && (list[j].id === 'tr_kibris' || list[j].id === 'tr_girne')) continue;
+            const c = getProvCenterXY(list[j]);
+            sumX += c.x;
+            sumY += c.y;
+            count++;
+          }
+          if (count === 0) {
+            const c0 = getProvCenterXY(list[0]);
+            sumX = c0.x;
+            sumY = c0.y;
+            count = 1;
+          }
+          let cx = sumX / count;
+          let cy = sumY / count - (z >= 1.38 ? 16 * uiScale : 0);
+
+          // Offset country title away from capital city if too close to eliminate text occlusion
+          const cap = list.find(p => p.isCapital);
+          if (cap) {
+            const capC = getProvCenterXY(cap);
+            if (Math.hypot(cx - capC.x, cy - capC.y) < 32) {
+              cy += 24;
+            }
+          }
+
+          const sx = cx * z + worldCam.x;
+          const sy = cy * z + worldCam.y;
+          if (sx < -120 || sx > width + 120 || sy < -40 || sy > height + 40) continue;
+
+          const bannerText = `${(nCfg.shortName || nCfg.name || '').toUpperCase()}`.trim();
+          const baseFontPx = list.length >= 6 ? 13.5 : (list.length >= 3 ? 11.5 : 9.8);
+          const fontPx = baseFontPx * uiScale;
+          const screenBannerW = bannerText.length * 7.2;
+          const screenBannerH = 16;
+
+          if (z < 1.38) {
+            if (intersectsOccupied(sx, sy, screenBannerW, screenBannerH, 4)) continue;
+            registerOccupied(sx, sy, screenBannerW, screenBannerH, 4);
+          }
+
+          ctx.save();
+          ctx.globalAlpha = bannerAlpha;
+          ctx.font = `800 ${fontPx.toFixed(1)}px "Plus Jakarta Sans", "Inter", system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.lineWidth = 3.4 * uiScale;
+          ctx.strokeStyle = 'rgba(4, 9, 20, 0.90)';
+          ctx.strokeText(bannerText, cx, cy);
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillText(bannerText, cx, cy);
+          ctx.restore();
         }
-        if (count === 0) {
-          const c0 = getProvCenterXY(list[0]);
-          sumX = c0.x;
-          sumY = c0.y;
-          count = 1;
-        }
-        const cx = sumX / count;
-        const cy = sumY / count - (z >= 1.38 ? 16 * uiScale : 0);
-
-        const sx = cx * z + worldCam.x;
-        const sy = cy * z + worldCam.y;
-        if (sx < -120 || sx > width + 120 || sy < -40 || sy > height + 40) continue;
-
-        const bannerText = `${(nCfg.shortName || nCfg.name || '').toUpperCase()}`.trim();
-        const baseFontPx = list.length >= 6 ? 13.5 : (list.length >= 3 ? 11.5 : 9.8);
-        const fontPx = baseFontPx * uiScale;
-        const screenBannerW = bannerText.length * 7.2;
-        const screenBannerH = 16;
-
-        if (z < 1.38) {
-          if (intersectsOccupied(sx, sy, screenBannerW, screenBannerH, 4)) continue;
-          registerOccupied(sx, sy, screenBannerW, screenBannerH, 4);
-        }
-
-        ctx.save();
-        ctx.globalAlpha = bannerAlpha;
-        ctx.font = `800 ${fontPx.toFixed(1)}px "Plus Jakarta Sans", "Inter", system-ui, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.lineWidth = 3.4 * uiScale;
-        ctx.strokeStyle = 'rgba(4, 9, 20, 0.90)';
-        ctx.strokeText(bannerText, cx, cy);
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillText(bannerText, cx, cy);
-        ctx.restore();
       }
     }
 
@@ -12382,9 +12463,31 @@ window.SoH = window.SoH || {};
     const rawName = prov.cityName || prov.name;
     const cityLabel = z >= 3.1 ? rawName : rawName.split('/')[0].trim();
 
+    // Compute label text first
+    let labelText = prov.isCapital ? `★ ${cityLabel}` : cityLabel;
+    if (mapMode === 'resources' && z >= 1.8) {
+      const domRes = getDominantCityResource(prov);
+      labelText += ` ${domRes.cfg.icon}`;
+    } else if (mapMode === 'military' && z >= 1.8) {
+      const gar = Math.max(0, Math.round(prov.garrison !== undefined ? prov.garrison : 120));
+      labelText += ` (${gar})`;
+    }
+
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(uiScale, uiScale);
+
+    const hasCounter = z >= 1.30 || isSelected || isHovered || mapMode === 'military';
+    const fontPx = prov.isCapital || isSelected ? 9.6 : (tier === 1 ? 8.8 : (tier === 2 ? 8.2 : 7.6));
+    const estScreenW = Math.max(labelText.length * (fontPx * 0.58), hasCounter ? 40 : 16);
+    const estScreenH = hasCounter ? 30 : 15;
+    const centerScreenY = sy + (hasCounter ? 3 : -4);
+
+    if (!isSelected && !isHovered && intersectsOccupied(sx, centerScreenY, estScreenW, estScreenH, 3)) {
+      ctx.restore();
+      return;
+    }
+    registerOccupied(sx, centerScreenY, estScreenW, estScreenH, 3);
 
     // 1. Subtle Target Ring only on Selected or Hovered City
     if (isSelected || isHovered) {
@@ -12408,37 +12511,80 @@ window.SoH = window.SoH || {};
     ctx.strokeStyle = '#040914';
     ctx.stroke();
 
-    // 3. Frameless Minimalist Text Label (Check screen-space collision so labels never overlap)
-    let labelText = prov.isCapital ? `★ ${cityLabel}` : cityLabel;
-    if (mapMode === 'resources' && z >= 1.8) {
-      const domRes = getDominantCityResource(prov);
-      labelText += ` ${domRes.cfg.icon}`;
-    } else if (mapMode === 'military' && z >= 1.8) {
-      const gar = Math.max(0, Math.round(prov.garrison !== undefined ? prov.garrison : 120));
-      labelText += ` (${gar})`;
-    }
+    // 3. Frameless Minimalist Text Label (Crisp dark halo stroke)
+    ctx.font = `${prov.isCapital || isSelected ? 700 : 600} ${fontPx}px "Plus Jakarta Sans", "Inter", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 2.8;
+    ctx.strokeStyle = 'rgba(4, 9, 20, 0.92)';
+    ctx.strokeText(labelText, 0, -dotRadius - 3.2);
 
-    const fontPx = prov.isCapital || isSelected ? 9.6 : (tier === 1 ? 8.8 : (tier === 2 ? 8.2 : 7.6));
-    const estScreenW = labelText.length * (fontPx * 0.58);
-    const estScreenH = 13;
-    const labelScreenY = sy - 9;
+    ctx.fillStyle = isSelected
+      ? '#fde047'
+      : (prov.isCapital ? '#fef08a' : (tier === 3 ? '#cbd5e1' : '#f8fafc'));
+    ctx.fillText(labelText, 0, -dotRadius - 3.2);
 
-    if (isSelected || isHovered || !intersectsOccupied(sx, labelScreenY, estScreenW, estScreenH, 3)) {
-      registerOccupied(sx, labelScreenY, estScreenW, estScreenH, 3);
+    // 4. Tactical Military Division Counter (Studio Rule #3: Flag + Unit Icon + Strength + Morale Bar)
+    if (hasCounter) {
+      const gar = Math.max(10, Math.round(prov.garrison !== undefined ? prov.garrison : 100));
+      const flag = ownerCfg.flag || '🏳️';
+      const unitIcon = getDominantUnitIcon(prov);
+      const morale = clamp(prov.morale !== undefined ? prov.morale : 1.0, 0.1, 1.0);
+      const isAtWar = isNationAtWarWithPlayer(prov.owner);
 
-      ctx.font = `${prov.isCapital || isSelected ? 700 : 600} ${fontPx}px "Plus Jakarta Sans", "Inter", system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
+      const boxW = 38;
+      const boxH = 15;
+      const boxX = -boxW / 2;
+      const boxY = dotRadius + 3.0;
 
-      // Crisp dark halo stroke instead of bulky rectangular boxes!
-      ctx.lineWidth = 2.8;
-      ctx.strokeStyle = 'rgba(4, 9, 20, 0.92)';
-      ctx.strokeText(labelText, 0, -dotRadius - 2.5);
+      registerOccupied(sx, sy + 10, boxW, boxH, 2);
 
+      // Badge body
+      roundRectPath(ctx, boxX, boxY, boxW, boxH, 3);
       ctx.fillStyle = isSelected
-        ? '#fde047'
-        : (prov.isCapital ? '#fef08a' : (tier === 3 ? '#cbd5e1' : '#f8fafc'));
-      ctx.fillText(labelText, 0, -dotRadius - 2.5);
+        ? 'rgba(15, 23, 42, 0.98)'
+        : (isAtWar ? 'rgba(38, 12, 16, 0.95)' : 'rgba(9, 14, 26, 0.94)');
+      ctx.fill();
+
+      ctx.lineWidth = isSelected ? 1.5 : 0.9;
+      ctx.strokeStyle = isSelected
+        ? '#facc15'
+        : (isAtWar ? '#f87171' : (ownerCfg.borderColor || '#38bdf8'));
+      ctx.stroke();
+
+      // Left color notch
+      ctx.fillStyle = ownerCfg.color || '#3b82f6';
+      roundRectPath(ctx, boxX + 1, boxY + 1, 2.5, boxH - 2, 1);
+      ctx.fill();
+
+      // Flag & Unit Icon
+      ctx.font = '7px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${flag}${unitIcon}`, boxX + 4.5, boxY + 6.0);
+
+      // Strength (e.g. 150 or 1.2K)
+      const strText = gar >= 1000 ? `${(gar / 1000).toFixed(1)}K` : `${gar}`;
+      ctx.font = '800 7px "Plus Jakarta Sans", "Inter", sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillStyle = isSelected ? '#fef08a' : '#f8fafc';
+      ctx.fillText(strText, boxX + boxW - 2.5, boxY + 6.0);
+
+      // Bottom Morale / Organization Bar
+      const barPad = 2;
+      const barW = boxW - barPad * 2;
+      const barH = 2.0;
+      const barX = boxX + barPad;
+      const barY = boxY + boxH - 3.0;
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+      roundRectPath(ctx, barX, barY, barW, barH, 1);
+      ctx.fill();
+
+      const moraleCol = morale >= 0.75 ? '#22c55e' : (morale >= 0.45 ? '#eab308' : '#ef4444');
+      ctx.fillStyle = moraleCol;
+      roundRectPath(ctx, barX, barY, barW * morale, barH, 1);
+      ctx.fill();
     }
 
     ctx.restore();
@@ -12568,32 +12714,50 @@ window.SoH = window.SoH || {};
         ctx.translate(c2.x, c2.y - 24 * invScale);
         ctx.scale(invScale, invScale);
 
+        const defTroops = Math.max(10, Math.round(b.defenderTroops !== undefined ? b.defenderTroops : (toProv.garrison || 100)));
+        const ratio = clamp(troops / Math.max(1, troops + defTroops), 0.05, 0.95);
+        const winPct = Math.round(ratio * 100);
+        const attackerWinning = ratio >= 0.50;
+
+        // HoI4 Battle Bubble: Pulsing Outer Glow Ring
         ctx.beginPath();
-        ctx.arc(0, 0, 12 + pulse * 5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(239, 68, 68, ${0.24 + pulse * 0.22})`;
+        ctx.arc(0, 0, 15 + pulse * 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = attackerWinning
+          ? `rgba(34, 197, 94, ${0.15 + pulse * 0.18})`
+          : `rgba(239, 68, 68, ${0.15 + pulse * 0.18})`;
         ctx.fill();
-        ctx.strokeStyle = '#facc15';
-        ctx.lineWidth = 1.4;
+
+        // HoI4 Battle Bubble: Solid Badge
+        ctx.beginPath();
+        ctx.arc(0, 0, 13, 0, Math.PI * 2);
+        ctx.fillStyle = attackerWinning ? 'rgba(21, 128, 61, 0.95)' : 'rgba(185, 28, 28, 0.95)';
+        ctx.fill();
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 1.8;
         ctx.stroke();
 
-        ctx.font = '12px sans-serif';
+        // Battle Swords & Win Percentage (like in HoI4)
+        ctx.font = '7.5px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(pulse > 0.5 ? '⚔️' : '💥', 0, 0);
+        ctx.fillText('⚔️', 0, -4);
 
-        const defTroops = Math.max(10, Math.round(b.defenderTroops !== undefined ? b.defenderTroops : (toProv.garrison || 100)));
-        const ratio = clamp(troops / Math.max(1, troops + defTroops), 0.12, 0.88);
-        const barW = 50;
-        const barH = 5;
-        roundRectPath(ctx, -barW / 2 - 1, -16, barW + 2, barH + 2, 3);
+        ctx.font = '800 8.5px "Plus Jakarta Sans", "Inter", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`${winPct}`, 0, 5.5);
+
+        // Combat HP bar underneath bubble
+        const barW = 44;
+        const barH = 4.5;
+        roundRectPath(ctx, -barW / 2 - 1, 15, barW + 2, barH + 2, 2.5);
         ctx.fillStyle = '#050911';
         ctx.fill();
 
         ctx.fillStyle = attCfg.color || '#ef4444';
-        ctx.fillRect(-barW / 2, -15, barW * ratio, barH);
+        ctx.fillRect(-barW / 2, 16, barW * ratio, barH);
         const defCfg = getNationConfig(toProv.owner);
         ctx.fillStyle = defCfg.color || '#3b82f6';
-        ctx.fillRect(-barW / 2 + barW * ratio, -15, barW * (1 - ratio), barH);
+        ctx.fillRect(-barW / 2 + barW * ratio, 16, barW * (1 - ratio), barH);
         ctx.restore();
       }
     });
@@ -12671,6 +12835,37 @@ window.SoH = window.SoH || {};
 
     canvas.addEventListener('contextmenu', e => {
       e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const wp = screenToWorld(mx, my);
+      const targetId = hitTestWorldCity(wp.x, wp.y);
+
+      // HoI4 Direct Army Tactical Order: If a province is selected and user right-clicks an adjacent province
+      if (SoH.state && SoH.state.selectedProvinceId && targetId && targetId !== SoH.state.selectedProvinceId) {
+        const srcProv = getProvince(SoH.state.selectedProvinceId);
+        const dstProv = getProvince(targetId);
+        const pid = getPlayerNationId();
+
+        if (srcProv && srcProv.owner === pid && Array.isArray(srcProv.neighbors) && srcProv.neighbors.includes(targetId)) {
+          const sendTroops = Math.floor((srcProv.garrison || 0) * 0.70);
+          if (sendTroops >= 10 && SoH.Simulation && typeof SoH.Simulation.orderArmyAction === 'function') {
+            SoH.Simulation.orderArmyAction(srcProv.id, dstProv.id, sendTroops);
+            const isAttack = dstProv.owner !== pid;
+            if (SoH.Audio && typeof SoH.Audio.play === 'function') {
+              SoH.Audio.play(isAttack ? 'horn' : 'march');
+            }
+            if (SoH.UI && typeof SoH.UI.showToast === 'function') {
+              SoH.UI.showToast(
+                `${isAttack ? '⚔️ Taarruz Harekâtı' : '🛡️ İntikal'}: ${srcProv.cityName || srcProv.name} → ${dstProv.cityName || dstProv.name} (${sendTroops} Asker)`,
+                isAttack ? 'war' : 'info'
+              );
+            }
+            return;
+          }
+        }
+      }
+
       if (SoH.state) {
         if (SoH.state.selectedTool) {
           SoH.state.selectedTool = null;
@@ -12778,6 +12973,58 @@ window.SoH = window.SoH || {};
       worldCam.targetY = my - (my - worldCam.targetY) * ratio;
       worldCam.targetZoom = nextZoom;
     }, { passive: false });
+
+    // HoI4 Global Keyboard Shortcuts (Space: Pause/Play, 1-5: Speed, M: Map Mode, Esc: Deselect)
+    window.addEventListener('keydown', e => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (SoH.Simulation && typeof SoH.Simulation.toggleSpeed === 'function') {
+          SoH.Simulation.toggleSpeed();
+        } else if (SoH.state) {
+          SoH.state.speed = SoH.state.speed === 0 ? 1 : 0;
+          if (SoH.UI && typeof SoH.UI.renderTopBar === 'function') SoH.UI.renderTopBar();
+          if (SoH.UI && typeof SoH.UI.showToast === 'function') {
+            SoH.UI.showToast(SoH.state.speed === 0 ? '⏸️ Simülasyon Durduruldu' : '▶️ Simülasyon Canlı (1x)', 'info');
+          }
+        }
+      } else if (e.key === '1') {
+        if (SoH.Simulation && typeof SoH.Simulation.setSpeed === 'function') SoH.Simulation.setSpeed(1);
+        else if (SoH.state) SoH.state.speed = 1;
+        if (SoH.UI && typeof SoH.UI.showToast === 'function') SoH.UI.showToast('Hız: 1x (Normal)', 'info');
+      } else if (e.key === '2') {
+        if (SoH.Simulation && typeof SoH.Simulation.setSpeed === 'function') SoH.Simulation.setSpeed(2);
+        else if (SoH.state) SoH.state.speed = 2;
+        if (SoH.UI && typeof SoH.UI.showToast === 'function') SoH.UI.showToast('Hız: 2x (Hızlı)', 'info');
+      } else if (e.key === '3') {
+        if (SoH.Simulation && typeof SoH.Simulation.setSpeed === 'function') SoH.Simulation.setSpeed(3);
+        else if (SoH.state) SoH.state.speed = 3;
+        if (SoH.UI && typeof SoH.UI.showToast === 'function') SoH.UI.showToast('Hız: 3x (Çok Hızlı)', 'info');
+      } else if (e.key === '4' || e.key === '5') {
+        if (SoH.Simulation && typeof SoH.Simulation.setSpeed === 'function') SoH.Simulation.setSpeed(4);
+        else if (SoH.state) SoH.state.speed = 4;
+        if (SoH.UI && typeof SoH.UI.showToast === 'function') SoH.UI.showToast('Hız: 4x (Yıldırım)', 'info');
+      } else if (e.key === 'm' || e.key === 'M') {
+        if (SoH.state) {
+          const modes = ['political', 'resources', 'military', 'economy'];
+          const curIdx = modes.indexOf(SoH.state.mapMode || 'political');
+          SoH.state.mapMode = modes[(curIdx + 1) % modes.length];
+          if (SoH.UI && typeof SoH.UI.renderMapControls === 'function') SoH.UI.renderMapControls();
+          if (SoH.UI && typeof SoH.UI.showToast === 'function') {
+            const labels = { political: 'Siyasi Harita (HoI4 Opak)', resources: 'Kaynak Haritası', military: 'Askeri Harita', economy: 'Ekonomi Haritası' };
+            SoH.UI.showToast(`🗺️ Harita Modu: ${labels[SoH.state.mapMode] || SoH.state.mapMode}`, 'info');
+          }
+        }
+      } else if (e.key === 'Escape') {
+        if (SoH.UI && typeof SoH.UI.closePanel === 'function') {
+          SoH.UI.closePanel();
+        }
+        if (SoH.state && SoH.state.armyMoveSourceId) {
+          SoH.state.armyMoveSourceId = null;
+        }
+      }
+    });
   }
 
   function updateD3CountryTooltip(clientX, clientY, provId) {
@@ -13277,33 +13524,31 @@ SoH.UI = {
     const box = document.getElementById('map-controls');
     if (!box || !SoH.state) return;
     const st = SoH.state;
+    const showLayers = st.showMapLayers || false;
 
     box.innerHTML = `
-      <div class="map-pill-bar">
-        <button class="pill-btn ${st.mapMode === 'political' ? 'active' : ''}" onclick="SoH.state.mapMode='political';SoH.UI.renderMapControls()">🗺️ Siyasi Opak</button>
-        <button class="pill-btn ${st.mapMode === 'resources' ? 'active' : ''}" onclick="SoH.state.mapMode='resources';SoH.UI.renderMapControls()">💎 Yeraltı & Kaynaklar</button>
+      <div class="map-pill-bar" style="background:rgba(9,14,26,0.92);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:4px 6px;">
+        <button class="pill-btn ${st.mapMode === 'political' ? 'active' : ''}" onclick="SoH.state.mapMode='political';SoH.UI.renderMapControls()">🗺️ Siyasi</button>
+        <button class="pill-btn ${st.mapMode === 'resources' ? 'active' : ''}" onclick="SoH.state.mapMode='resources';SoH.UI.renderMapControls()">💎 Kaynak</button>
         <button class="pill-btn ${st.mapMode === 'military' ? 'active' : ''}" onclick="SoH.state.mapMode='military';SoH.UI.renderMapControls()">⚔️ Ordular</button>
         <button class="pill-btn ${st.mapMode === 'economy' ? 'active' : ''}" onclick="SoH.state.mapMode='economy';SoH.UI.renderMapControls()">💰 Ekonomi</button>
+        <button class="pill-btn ${showLayers ? 'active' : ''}" onclick="SoH.state.showMapLayers = !SoH.state.showMapLayers; SoH.UI.renderMapControls();" title="Taban Harita & Projeksiyon Seçenekleri">⚙️ ${showLayers ? 'Kapat' : 'Katmanlar'}</button>
       </div>
-      <div class="map-pill-bar">
-        <button class="pill-btn ${st.basemapStyle === 'earth_hybrid' ? 'active' : ''}" onclick="SoH.state.basemapStyle='earth_hybrid';SoH.UI.renderMapControls()">🌍 Google Earth Hibrit</button>
-        <button class="pill-btn ${st.basemapStyle === 'satellite' ? 'active' : ''}" onclick="SoH.state.basemapStyle='satellite';SoH.UI.renderMapControls()">🛰️ Saf Google Earth</button>
-        <button class="pill-btn ${st.basemapStyle === 'terrain' ? 'active' : ''}" onclick="SoH.state.basemapStyle='terrain';SoH.UI.renderMapControls()">⛰️ Google Fiziki</button>
-        <button class="pill-btn ${st.basemapStyle === 'dark' ? 'active' : ''}" onclick="SoH.state.basemapStyle='dark';SoH.UI.renderMapControls()">🗺️ Tam Opak Siyasi</button>
-      </div>
-      <div class="map-pill-bar">
-        <button class="pill-btn ${(!st.projectionType || st.projectionType === 'mercator') ? 'active' : ''}" onclick="SoH.Renderer.setProjection('mercator');SoH.UI.renderMapControls()">📐 D3 Mercator</button>
-        <button class="pill-btn ${st.projectionType === 'equalEarth' ? 'active' : ''}" onclick="SoH.Renderer.setProjection('equalEarth');SoH.UI.renderMapControls()">🌐 D3 Equal Earth</button>
-        <button class="pill-btn" onclick="SoH.Renderer.zoomBy(1.3)">➕ Yakınlaş</button>
-        <button class="pill-btn" onclick="SoH.Renderer.zoomBy(0.77)">➖ Uzaklaş</button>
-      </div>
-      <div class="map-pill-bar">
-        <button class="pill-btn" onclick="SoH.UI.jumpCamera('turkiye')">🇹🇷 Türkiye</button>
-        <button class="pill-btn" onclick="SoH.UI.jumpCamera('europe')">Avrupa</button>
-        <button class="pill-btn" onclick="SoH.UI.jumpCamera('asia')">Asya</button>
-        <button class="pill-btn" onclick="SoH.UI.jumpCamera('america')">Amerika</button>
-        <button class="pill-btn" onclick="SoH.UI.jumpCamera('world')">🌐 Dünya</button>
-      </div>
+      ${showLayers ? `
+        <div class="map-pill-bar" style="background:rgba(9,14,26,0.90);backdrop-filter:blur(12px);border-radius:12px;padding:3px 6px;margin-top:4px;">
+          <button class="pill-btn ${st.basemapStyle === 'dark' ? 'active' : ''}" onclick="SoH.state.basemapStyle='dark';SoH.UI.renderMapControls()">🗺️ Opak Siyasi</button>
+          <button class="pill-btn ${st.basemapStyle === 'earth_hybrid' ? 'active' : ''}" onclick="SoH.state.basemapStyle='earth_hybrid';SoH.UI.renderMapControls()">🌍 Earth Hibrit</button>
+          <button class="pill-btn ${st.basemapStyle === 'satellite' ? 'active' : ''}" onclick="SoH.state.basemapStyle='satellite';SoH.UI.renderMapControls()">🛰️ Saf Uydu</button>
+          <button class="pill-btn ${st.basemapStyle === 'terrain' ? 'active' : ''}" onclick="SoH.state.basemapStyle='terrain';SoH.UI.renderMapControls()">⛰️ Fiziki</button>
+        </div>
+        <div class="map-pill-bar" style="background:rgba(9,14,26,0.90);backdrop-filter:blur(12px);border-radius:12px;padding:3px 6px;margin-top:4px;">
+          <button class="pill-btn ${(!st.projectionType || st.projectionType === 'mercator') ? 'active' : ''}" onclick="SoH.Renderer.setProjection('mercator');SoH.UI.renderMapControls()">📐 Mercator</button>
+          <button class="pill-btn ${st.projectionType === 'equalEarth' ? 'active' : ''}" onclick="SoH.Renderer.setProjection('equalEarth');SoH.UI.renderMapControls()">🌐 Equal Earth</button>
+          <button class="pill-btn" onclick="SoH.UI.jumpCamera('turkiye')">🇹🇷 TR</button>
+          <button class="pill-btn" onclick="SoH.UI.jumpCamera('europe')">Avrupa</button>
+          <button class="pill-btn" onclick="SoH.UI.jumpCamera('world')">Dünya</button>
+        </div>
+      ` : ''}
       ${
         st.armyMoveSourceId
           ? `<div class="map-pill-bar" style="background:rgba(225,29,72,0.88);border-color:#fda4af;padding:7px 14px;">
