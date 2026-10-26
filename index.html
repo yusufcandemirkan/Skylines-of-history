@@ -4953,6 +4953,525 @@ SoH.CONFIG.WORLD_CITIES = [
 
 </script>
   <script>
+// Skylines of History — Central Balance Configuration
+// Every tunable number of the war / diplomacy systems lives here. Later phases (economy, tech, politics)
+// add their own sections to SoH.BALANCE. Change a value, rebuild, done — no code edits needed.
+window.SoH = window.SoH || {};
+
+SoH.BALANCE = SoH.BALANCE || {};
+
+SoH.BALANCE.war = {
+  // --- Unit rock-paper-scissors (attacker unit type -> multiplier vs defender unit type) ---
+  // Values > 1 mean the attacker is strong against that unit type.
+  unitCounters: {
+    infantry:  { infantry: 1.00, tank: 0.75, artillery: 1.20, airforce: 1.00, naval: 1.00 },
+    tank:      { infantry: 1.30, tank: 1.00, artillery: 1.25, airforce: 0.85, naval: 1.00 },
+    artillery: { infantry: 1.25, tank: 1.10, artillery: 1.00, airforce: 0.80, naval: 1.15 },
+    airforce:  { infantry: 1.15, tank: 1.30, artillery: 1.25, airforce: 1.00, naval: 1.30 },
+    naval:     { infantry: 0.90, tank: 0.90, artillery: 0.85, airforce: 0.80, naval: 1.00 }
+  },
+  // --- Terrain defender bonus (fraction) ---
+  terrain: {
+    plains:   { name: 'Ova',     defense: 0.00, attackerSupplyPenalty: 0.00 },
+    hills:    { name: 'Tepelik', defense: 0.08, attackerSupplyPenalty: 0.04 },
+    mountain: { name: 'Dağlık',  defense: 0.22, attackerSupplyPenalty: 0.10 },
+    urban:    { name: 'Şehir',   defense: 0.12, attackerSupplyPenalty: 0.03 },
+    desert:   { name: 'Çöl',     defense: 0.02, attackerSupplyPenalty: 0.12 },
+    arctic:   { name: 'Buzul',   defense: 0.06, attackerSupplyPenalty: 0.14 }
+  },
+  terrainKeywords: [
+    { re: /Dağ|Alp|Kafkas|Ural|Himalaya|And |Yayla|Erzurum|Kars|Hakkari|Van /i, type: 'mountain' },
+    { re: /Çöl|Sahra|Karakum|Arap|Suudi|Ghawar|Kuzey Kubbesi|Pilbara/i, type: 'desert' },
+    { re: /Sibirya|Kola|Kiruna|Yakutsk|Athabasca|Alberta/i, type: 'arctic' },
+    { re: /Maden|Madeni|Havzası|Ocak/i, type: 'hills' }
+  ],
+  // --- Supply: attacker loses power with distance from own supply sources ---
+  supplyRangeWorldUnits: 420,          // distance at which supply penalty reaches max
+  supplyMaxPenalty: 0.28,
+  logisticsLevelRelief: 0.06,          // each 'logistics' level in the origin city reduces penalty
+  // --- Morale ---
+  moraleBase: 1.0,
+  moraleHappinessWeight: 0.0035,       // per happiness point away from 70
+  moraleFatigueWeight: 0.0045,         // per war-fatigue point
+  moraleMin: 0.70, moraleMax: 1.15,
+  // --- Casus belli ---
+  casusBelli: {
+    none:       { name: 'Casus belli yok',        trustPenalty: 22, stabilityPenalty: 6, relationPenalty: 35 },
+    border:     { name: 'Sınır anlaşmazlığı',     trustPenalty: 4,  stabilityPenalty: 0, relationPenalty: 15 },
+    resources:  { name: 'Kaynak hakkı iddiası',   trustPenalty: 6,  stabilityPenalty: 0, relationPenalty: 18 },
+    liberation: { name: 'Kurtuluş savaşı',        trustPenalty: 0,  stabilityPenalty: 0, relationPenalty: 10 },
+    defense:    { name: 'Müttefik savunması',     trustPenalty: 0,  stabilityPenalty: 0, relationPenalty: 8 },
+    embargo:    { name: 'Ambargo karşılığı',      trustPenalty: 2,  stabilityPenalty: 0, relationPenalty: 12 },
+    fabricated: { name: 'Uydurma casus belli',    trustPenalty: 10, stabilityPenalty: 2, relationPenalty: 25 }
+  },
+  truceDays: 90,                       // ceasefire length after peace
+  fabricateCbCost: 220,                // gold
+  fabricateCbDays: 20,                 // days until ready
+  cbExpiryDays: 360,
+  // --- War score ---
+  warScorePerCityCaptured: 18,
+  warScorePerDefense: 4,
+  warScoreOccupationPerTick: 0.35,
+  // --- War fatigue (0-100) ---
+  fatigue: {
+    perTickAtWar: 0.18,
+    perCityLost: 4.0,
+    perBattleLost: 1.5,
+    recoveryAtPeace: 0.45,
+    happinessPenaltyAt: 40,            // above this fatigue happiness drops
+    goldPenaltyAt: 60,
+    forcedPeaceAt: 92                  // AI accepts any reasonable peace
+  },
+  // --- Occupation / assimilation ---
+  occupation: {
+    assimilationPerTick: 1.1,          // % per tick for normal annexation
+    colonyAssimilationFactor: 0.35,
+    unrestMax: 60,
+    unrestDecayPerAssimilation: 0.5,
+    garrisonRiotThreshold: 70,         // riot chance only when unrest above this and garrison below 120
+    riotChancePerTick: 0.04,
+    outputPenaltyWhileOccupied: 0.45,
+    colonyTributeRate: 0.30
+  },
+  // --- Vassals ---
+  vassal: {
+    tributeRate: 0.20,                 // share of vassal gold net sent to overlord
+    freedomCost: 1,
+    autonomyGainPerTick: 0.06,
+    independenceAt: 100
+  },
+  // --- Peace deal costs (war score) ---
+  peace: {
+    cedeCityCost: 22,                  // per city (+ pop factor)
+    tributeCost: 18,
+    vassalizeCost: 70,
+    colonizeCost: 60,
+    whitePeaceCost: 0,
+    tributeGoldPerTick: 12,
+    tributeTicks: 60,
+    aiAcceptBias: 6
+  },
+  // --- Strategic units ---
+  naval: {
+    fleetCostGold: 280, fleetCostSteel: 40, fleetUpkeep: 4,
+    blockadeFleetsNeeded: 2, blockadeTradePenalty: 0.55, blockadeGoldDrain: 10
+  },
+  nuclear: {
+    requiredTech: 'nuclear_program', uraniumCost: 60, goldCost: 800,
+    garrisonLoss: 0.65, populationLoss: 0.28, globalTrustPenalty: 40, relationPenaltyAll: 30,
+    cooldownDays: 180
+  }
+};
+
+SoH.BALANCE.diplomacy = {
+  trust: { start: 60, min: 0, max: 100, recoverPerTick: 0.03, treatyBreakPenalty: 18 },
+  attitudes: [
+    { min: 85, key: 'friendly',  label: 'Dost',      color: '#4ade80' },
+    { min: 65, key: 'warm',      label: 'Sıcak',     color: '#a3e635' },
+    { min: 40, key: 'neutral',   label: 'Nötr',      color: '#fbbf24' },
+    { min: 20, key: 'cold',      label: 'Soğuk',     color: '#fb923c' },
+    { min: 0,  key: 'hostile',   label: 'Düşman',    color: '#f87171' }
+  ],
+  alliance: { minRelation: 65, minTrust: 45, joinWarChance: 0.7 },
+  trade: {
+    agreementCost: 120, minRelation: 40, goldPerTick: 5, relationBoostPerTick: 0.05,
+    durationDays: 360, embargoBreaksAgreement: true
+  },
+  embargo: {
+    relationPenalty: 22, targetGoldDrainPerTick: 4, imposerTradeLoss: 1, durationDays: 240, trustPenalty: 3
+  },
+  sanctions: { relationPenalty: 15, targetRevenueMult: 0.82, cost: 90, durationDays: 300 },
+  espionage: {
+    spyCost: 140, missionCooldownDays: 30,
+    missions: {
+      intel:     { name: 'Gizli İstihbarat',  cost: 60,  baseSuccess: 0.78, detectRisk: 0.10 },
+      steal_gold:{ name: 'Hazine Hırsızlığı', cost: 90,  baseSuccess: 0.55, detectRisk: 0.28, stealRate: 0.06 },
+      sabotage:  { name: 'Sabotaj',           cost: 130, baseSuccess: 0.50, detectRisk: 0.36, garrisonLoss: 0.18 },
+      incite:    { name: 'İsyan Kışkırtma',   cost: 150, baseSuccess: 0.45, detectRisk: 0.40, unrest: 25 },
+      tech:      { name: 'Teknoloji Çalma',   cost: 170, baseSuccess: 0.42, detectRisk: 0.45, researchSteal: 40 }
+    },
+    detectedRelationPenalty: 30, detectedTrustPenalty: 12
+  },
+  gift: { cost: 150, relationGain: 20, trustGain: 2 },
+  events: {
+    everyDays: 45,                     // average cadence for random world events
+    chanceEachCheck: 0.85
+  }
+};
+
+// ============================================================================
+// PHASE 2: ADVANCED ECONOMY, DYNAMIC COMMODITY MARKET & PRODUCTION CHAINS
+// ============================================================================
+SoH.BALANCE.economy = {
+  // Base Commodity Market prices
+  basePrices: {
+    iron: 18,
+    oil: 25,
+    uranium: 50,
+    gold_ore: 38,
+    minerals: 22,
+    grain: 12,
+    livestock: 16,
+    steel: 34,
+    packaged_food: 26,
+    fuel_energy: 42,
+    consumer_goods: 38,
+    enriched_uranium: 85
+  },
+  priceFluctuationMax: 2.8,  // Maximum +180% surge during shortage
+  priceFluctuationMin: 0.35, // Minimum -65% drop during glut
+  priceInertia: 0.88,        // Price adjustment smoothing per tick
+
+  // Production Chains (Raw -> Intermediate -> Advanced Goods)
+  chains: {
+    steel: {
+      id: 'steel',
+      name: 'Çelik & Ağır Metal',
+      icon: '⚙️',
+      facility: 'refinery',
+      inputs: { iron: 1.5, minerals: 0.5 },
+      output: { steel: 1.0 },
+      baseYield: 3.5,
+      desc: 'Demir ve cevher işlenerek yüksek dayanımlı alaşımlı çelik üretilir.'
+    },
+    packaged_food: {
+      id: 'packaged_food',
+      name: 'Paketlenmiş Gıda & Konserve',
+      icon: '🥫',
+      facility: 'farm',
+      inputs: { grain: 1.4, livestock: 0.8 },
+      output: { packaged_food: 1.0 },
+      baseYield: 4.0,
+      desc: 'Tahıl ve besi ürünleri modern tesislerde işlenerek gıda güvencesi sağlar.'
+    },
+    fuel_energy: {
+      id: 'fuel_energy',
+      name: 'Rafine Yakıt & Enerji',
+      icon: '⚡',
+      facility: 'refinery',
+      inputs: { oil: 1.6, minerals: 0.4 },
+      output: { fuel_energy: 1.0 },
+      baseYield: 3.2,
+      desc: 'Ham petrol rafinerilerde işlenerek sanayi ve ordu için yakıta dönüşür.'
+    },
+    consumer_goods: {
+      id: 'consumer_goods',
+      name: 'Tüketim Malları & Elektronik',
+      icon: '📱',
+      facility: 'logistics',
+      inputs: { minerals: 0.8, steel: 0.6, packaged_food: 0.4 },
+      output: { consumer_goods: 1.0 },
+      baseYield: 2.8,
+      desc: 'Halkın refahını, tüketim harcamalarını ve vergi gelirini artırır.'
+    },
+    enriched_uranium: {
+      id: 'enriched_uranium',
+      name: 'Zenginleştirilmiş Nükleer Yakıt',
+      icon: '☢️',
+      facility: 'research_hub',
+      inputs: { uranium: 1.5, fuel_energy: 0.8 },
+      output: { enriched_uranium: 0.8 },
+      baseYield: 1.5,
+      desc: 'Nükleer enerji reaktörleri ve stratejik nükleer caydırıcılık için yakıt.'
+    }
+  },
+
+  // Macroeconomics: Inflation, Central Bank & Public Debt
+  macro: {
+    targetInflation: 2.5,          // % ideal inflation rate
+    moneySupplyImpact: 0.00006,    // inflation increase per excessive treasury surplus/deficit
+    tariffInflationWeight: 0.045,  // high tariffs cause slight imported inflation
+    baseInterestRate: 0.05,        // 5% Central Bank policy rate
+    debtUnit: 500,                 // standard sovereign bond borrowing unit
+    maxDebtRatio: 3.0,             // debt-to-GDP ceiling
+    tariffYieldRate: 0.65          // customs tariff collection efficiency
+  }
+};
+
+// ============================================================================
+// PHASE 3: AI PERSONALITIES, DIFFICULTY SCALING & COALITIONS
+// ============================================================================
+SoH.BALANCE.ai = {
+  difficulties: {
+    easy: {
+      id: 'easy',
+      name: 'Kolay',
+      icon: '🌱',
+      desc: 'Acemi liderler için: AI daha pasif, oyuncuya %25 askeri koruma.',
+      aiIncomeMult: 0.80,
+      aiCombatMult: 0.85,
+      aiAggressionMult: 0.60,
+      playerCombatMult: 1.25,
+      peaceWillingnessBias: 25
+    },
+    normal: {
+      id: 'normal',
+      name: 'Normal',
+      icon: '⚖️',
+      desc: 'Dengeli tarihsel jeopolitik simülasyon.',
+      aiIncomeMult: 1.00,
+      aiCombatMult: 1.00,
+      aiAggressionMult: 1.00,
+      playerCombatMult: 1.00,
+      peaceWillingnessBias: 0
+    },
+    hard: {
+      id: 'hard',
+      name: 'Zor',
+      icon: '🔥',
+      desc: 'Yapay zeka kaynak ve ordu yönetiminde agresif ve fırsatçı.',
+      aiIncomeMult: 1.25,
+      aiCombatMult: 1.15,
+      aiAggressionMult: 1.35,
+      playerCombatMult: 0.90,
+      peaceWillingnessBias: -15
+    },
+    ironman: {
+      id: 'ironman',
+      name: 'Demir Adam',
+      icon: '💀',
+      desc: 'En üst düzey meydan okuma. Koalisyonlar ve süper güçler acımasız.',
+      aiIncomeMult: 1.45,
+      aiCombatMult: 1.25,
+      aiAggressionMult: 1.55,
+      playerCombatMult: 0.85,
+      peaceWillingnessBias: -30
+    }
+  },
+  personalities: {
+    militarist: {
+      id: 'militarist',
+      name: 'Militarist Genişlemeci',
+      icon: '⚔️',
+      aggressionBonus: 0.25,
+      armyBudgetShare: 0.50,
+      preferredUnits: ['tank', 'airforce'],
+      tariffTarget: 28,
+      peaceThresholdFatigue: 78,
+      espionageFocus: ['sabotage', 'incite'],
+      tradeSurplusThreshold: 220
+    },
+    merchant: {
+      id: 'merchant',
+      name: 'Ticari & Sanayi Devi',
+      icon: '🚢',
+      aggressionBonus: -0.20,
+      armyBudgetShare: 0.25,
+      preferredUnits: ['infantry', 'artillery'],
+      tariffTarget: 8,
+      peaceThresholdFatigue: 55,
+      espionageFocus: ['steal_gold', 'intel'],
+      tradeSurplusThreshold: 140
+    },
+    diplomat: {
+      id: 'diplomat',
+      name: 'Bölgesel Denge & İttifak',
+      icon: '🤝',
+      aggressionBonus: -0.15,
+      armyBudgetShare: 0.32,
+      preferredUnits: ['infantry', 'airforce'],
+      tariffTarget: 15,
+      peaceThresholdFatigue: 50,
+      espionageFocus: ['intel', 'tech'],
+      tradeSurplusThreshold: 180
+    },
+    expansionist: {
+      id: 'expansionist',
+      name: 'Küresel Hegemon',
+      icon: '🦅',
+      aggressionBonus: 0.35,
+      armyBudgetShare: 0.45,
+      preferredUnits: ['airforce', 'tank'],
+      tariffTarget: 20,
+      peaceThresholdFatigue: 82,
+      espionageFocus: ['sabotage', 'tech'],
+      tradeSurplusThreshold: 200
+    },
+    isolationist: {
+      id: 'isolationist',
+      name: 'Tarafsız / Savunmacı',
+      icon: '🛡️',
+      aggressionBonus: -0.30,
+      armyBudgetShare: 0.30,
+      preferredUnits: ['artillery', 'infantry'],
+      tariffTarget: 22,
+      peaceThresholdFatigue: 45,
+      espionageFocus: ['intel'],
+      tradeSurplusThreshold: 250
+    }
+  },
+  archetypes: {
+    turkiye: 'militarist',
+    azerbaycan: 'militarist',
+    rusya: 'militarist',
+    iran: 'militarist',
+    ukrayna: 'militarist',
+    abd: 'expansionist',
+    cin: 'expansionist',
+    almanya: 'merchant',
+    japonya: 'merchant',
+    suudi: 'merchant',
+    hindistan: 'merchant',
+    afrika: 'merchant',
+    ingiltere: 'diplomat',
+    fransa: 'diplomat',
+    iskandinavya: 'diplomat',
+    italya: 'diplomat',
+    ispanya: 'diplomat',
+    polonya: 'diplomat',
+    orta_asya: 'isolationist',
+    guney_amerika: 'isolationist',
+    balkanlar: 'isolationist'
+  },
+  coalitions: {
+    hegemonProvShare: 0.22, // 22% of world provinces
+    hegemonArmyShare: 0.28, // 28% of world military
+    minMembers: 2
+  }
+};
+
+// ============================================================================
+// PHASE 4: TECHNOLOGY TREE, INTERNAL POLITICS & POPULATION
+// ============================================================================
+SoH.BALANCE.techTree = {
+  branches: {
+    agri: { id: 'agri', name: 'Tarım & Biyoloji', icon: '🌾', color: '#10b981' },
+    industry: { id: 'industry', name: 'Sanayi & Madencilik', icon: '⚙️', color: '#f59e0b' },
+    military: { id: 'military', name: 'Askeri & Savunma', icon: '🎖️', color: '#ef4444' },
+    energy: { id: 'energy', name: 'Enerji & Lojistik', icon: '⚡', color: '#3b82f6' }
+  },
+  techs: [
+    // Tarım
+    { id: 'deep_drilling', branch: 'industry', tier: 1, name: 'Derin Sondaj & Madencilik', cost: 120, icon: '⛏️', desc: 'Maden ocaklarının üretim verimini +%40 artırır.' },
+    { id: 'modern_livestock', branch: 'agri', tier: 1, name: 'Modern Besicilik & Çiftlik', cost: 130, icon: '🐄', desc: 'Hayvancılık tesislerinin et/süt üretimini +%40 artırır.' },
+    { id: 'hydroponic_farming', branch: 'agri', tier: 2, name: 'Topraksız Dikey Tarım', cost: 260, icon: '🌱', prereq: 'modern_livestock', desc: 'Tahıl verimini +%50 artırır, kıtlık riskini sıfırlar.' },
+    { id: 'bio_food_security', branch: 'agri', tier: 3, name: 'Biyo Gıda Güvencesi', cost: 420, icon: '🧬', prereq: 'hydroponic_farming', desc: 'Ulusal nüfus büyüme hızını +%80 yükseltir.' },
+
+    // Sanayi
+    { id: 'steel_refining', branch: 'industry', tier: 2, name: 'Alaşım Çelik Rafinerisi', cost: 240, icon: '🏭', prereq: 'deep_drilling', desc: 'Çelik üretim hızını +%50 ve silah üretimini artırır.' },
+    { id: 'advanced_automation', branch: 'industry', tier: 3, name: 'Endüstriyel Robotik & Otomasyon', cost: 440, icon: '🤖', prereq: 'steel_refining', desc: 'Tüm şehir tesislerinin bakım masrafını %25 düşürür.' },
+    { id: 'ai_smart_factories', branch: 'industry', tier: 4, name: 'Yapay Zeka Mega Fabrikaları', cost: 750, icon: '🧠', prereq: 'advanced_automation', desc: 'Sanayi hasılasını +%65 artırır.' },
+
+    // Askeri
+    { id: 'siha_doctrine', branch: 'military', tier: 1, name: 'SİHA & Drone Doktrini', cost: 160, icon: '🛩️', desc: 'Hava filoları ve SİHA tümenlerinin saldırı gücünü +%35 artırır.' },
+    { id: 'smart_artillery', branch: 'military', tier: 2, name: 'Güdümlü Akıllı Topçu', cost: 280, icon: '🎯', prereq: 'siha_doctrine', desc: 'Topçu bataryalarının savunma katsayısını +%40 artırır.' },
+    { id: 'hybrid_air_defense', branch: 'military', tier: 3, name: 'Katmanlı Hava Savunma Kalkanı', cost: 480, icon: '🛡️', prereq: 'smart_artillery', desc: 'Düşman hava saldırısı hasarlarını %50 soğurur.' },
+    { id: 'hypersonic_missiles', branch: 'military', tier: 4, name: 'Hipersonik Seyir Füzeleri', cost: 800, icon: '🚀', prereq: 'hybrid_air_defense', desc: 'Tüm orduların taarruz gücünü +%50 artırır.' },
+
+    // Enerji
+    { id: 'global_trade_fleet', branch: 'energy', tier: 1, name: 'Küresel Ticaret Filosu', cost: 140, icon: '🚢', desc: 'İhracat gelirini +%35 artırır ve lojistik masrafları düşürür.' },
+    { id: 'high_speed_rail', branch: 'energy', tier: 2, name: 'Yüksek Hızlı Demiryolu Ağı', cost: 250, icon: '🚅', prereq: 'global_trade_fleet', desc: 'Şehirlerarası askeri intikal ve ikmal menzilini +%50 genişletir.' },
+    { id: 'nuclear_program', branch: 'energy', tier: 3, name: 'Nükleer Enerji Reaktörleri', cost: 500, icon: '☢️', prereq: 'high_speed_rail', desc: 'Zenginleştirilmiş uranyum üretimini ve stratejik caydırıcılığı açar.' },
+    { id: 'fusion_reactor', branch: 'energy', tier: 4, name: 'Temiz Füzyon Enerjisi', cost: 900, icon: '⚛️', prereq: 'nuclear_program', desc: 'Ülke geneli enerji maliyetini sıfırlar, hazineye devasa net kâr sağlar.' }
+  ]
+};
+
+SoH.BALANCE.politics = {
+  governments: {
+    democracy: {
+      id: 'democracy',
+      name: 'Parlamenter Demokrasi',
+      icon: '🏛️',
+      desc: 'Halk iradesi ve serbest piyasa: +%15 Mutluluk, +%18 Ticaret Kârı, -%10 Seferberlik Hızı.',
+      happinessBonus: 15,
+      tradeBonus: 0.18,
+      mobilizeSpeedMult: 0.90,
+      stabilityBase: 75
+    },
+    autocracy: {
+      id: 'autocracy',
+      name: 'Otokrasi / Güçlü Lider',
+      icon: '👑',
+      desc: 'Merkezi otorite: +%20 Vergi Tahsilatı, +%10 İstikrar, -%10 Mutluluk.',
+      happinessBonus: -10,
+      taxBonus: 0.20,
+      mobilizeSpeedMult: 1.10,
+      stabilityBase: 85
+    },
+    junta: {
+      id: 'junta',
+      name: 'Askeri Cunta',
+      icon: '🎖️',
+      desc: 'Savaş kabinesi: +%25 Ordu Morali, -%20 Asker Yetiştirme Maliyeti, -%25 Dış Ticaret.',
+      happinessBonus: -20,
+      armyMoraleBonus: 0.25,
+      recruitDiscount: 0.20,
+      tradePenalty: -0.25,
+      stabilityBase: 70
+    },
+    monarchy: {
+      id: 'monarchy',
+      name: 'Meşruti Monarşi',
+      icon: '⚜️',
+      desc: 'Geleneksel denge: +%10 Kültür & Prestij, +%10 İstikrar, Dengeli Bütçe.',
+      happinessBonus: 5,
+      cultureBonus: 0.15,
+      mobilizeSpeedMult: 1.00,
+      stabilityBase: 80
+    }
+  },
+  stability: {
+    base: 75,
+    min: 0,
+    max: 100,
+    riotThreshold: 35,    // Riots and strike outbreaks
+    coupThreshold: 20,    // Military coup / revolution risk
+    decayPerWarFatigue: 0.15,
+    boostPerNutrition: 0.05
+  },
+  disasters: {
+    chancePerMonth: 0.18,
+    types: {
+      famine: { id: 'famine', name: 'Kıtlık & Kuraklık', icon: '🌾', foodLoss: 0.40, stabilityLoss: 12 },
+      epidemic: { id: 'epidemic', name: 'Bulaşıcı Salgın', icon: '☣️', popLoss: 0.03, happinessLoss: 15 },
+      earthquake: { id: 'earthquake', name: 'Büyük Deprem', icon: '🏚️', infraLoss: 1, goldRepair: 350 }
+    }
+  }
+};
+
+SoH.BALANCE.cityManagement = {
+  buildings: {
+    mine: { name: 'Maden & Sondaj Ocağı', icon: '⛏️', baseCost: 180, upkeep: 6 },
+    ranch: { name: 'Besi & Çiftlik Tesisi', icon: '🐄', baseCost: 150, upkeep: 5 },
+    farm: { name: 'Mekanize Tarım Havzası', icon: '🌾', baseCost: 140, upkeep: 4 },
+    refinery: { name: 'Çelik & Petrol Rafinerisi', icon: '🏭', baseCost: 240, upkeep: 9 },
+    arms_plant: { name: 'Ağır Savunma & Mühimmat', icon: '⚔️', baseCost: 260, upkeep: 10 },
+    logistics: { name: 'Lojistik & Ticaret Limanı', icon: '🚛', baseCost: 190, upkeep: 7 },
+    base: { name: 'Garnizon & Askeri Karargah', icon: '🏰', baseCost: 210, upkeep: 8 },
+    research_hub: { name: 'Teknokent & Bilim Enstitüsü', icon: '🔬', baseCost: 280, upkeep: 11 }
+  },
+  tiers: [
+    { minPop: 0, name: 'Sınır Şehri', icon: '🏘️', maxInvestLevel: 3 },
+    { minPop: 3000000, name: 'Büyükşehir', icon: '🏙️', maxInvestLevel: 5 },
+    { minPop: 7000000, name: 'Metropol', icon: '🌆', maxInvestLevel: 7 },
+    { minPop: 15000000, name: 'Küresel Megakent', icon: '🌐', maxInvestLevel: 10 }
+  ]
+};
+
+// ============================================================================
+// PHASE 5: GAME FLOW, VICTORY CONDITIONS & ACHIEVEMENTS
+// ============================================================================
+SoH.BALANCE.flow = {
+  victory: {
+    domination: { id: 'domination', name: 'Dünya Hakimiyeti', desc: 'Dünyadaki 83 şehrin en az %50\'sini fethet.', requiredShare: 0.50 },
+    economic: { id: 'economic', name: 'Küresel Finans İmparatorluğu', desc: '25.000 ₺ Hazine ve dünya emtia pazarının %40\'ını kontrol et.', treasury: 25000, marketShare: 0.40 },
+    scientific: { id: 'scientific', name: 'Teknolojik Üstünlük', desc: '4 araştırma dalındaki tüm seviye 4 teknolojileri tamamla.', totalTechCount: 16 }
+  },
+  achievements: [
+    { id: 'first_conquest', name: 'İlk Zafer', icon: '🚩', desc: 'İlk düşman şehrini fethederek sınırlarını genişlet.' },
+    { id: 'steel_baron', name: 'Çelik Baronu', icon: '⚙️', desc: 'Ulusal stoklarda 250 birim Alaşımlı Çelik biriktir.' },
+    { id: 'global_superpower', name: 'Küresel Süper Güç', icon: '🦅', desc: 'En az 15 şehre ve 1.500 ordu mevcuduna ulaş.' },
+    { id: 'atomic_age', name: 'Atom Çağı', icon: '☢️', desc: 'Zenginleştirilmiş uranyum üretimine başla.' },
+    { id: 'grand_coalition', name: 'Büyük İttifak', icon: '🤝', desc: '3 farklı devletle eş zamanlı stratejik savunma ittifakı kur.' },
+    { id: 'debt_free', name: 'Mali İstikrar', icon: '💎', desc: 'Borçsuz ve AAA kredi notuna sahip bir ekonomi yönet.' }
+  ],
+  autosaveIntervalDays: 30
+};
+
+
+
+</script>
+  <script>
 // Skylines of History v4.0 — Real World Geopolitics, Underground Resources, Mining, Livestock, Trade & Warfare
 // Core Simulation Engine: 21 Nations, 83 Real-World Cities, 8 Strategic Resources, 8 Province Investments, Population Feeding & Commodity Trade
 
@@ -6769,6 +7288,2163 @@ window.SoH = window.SoH || {};
 
 </script>
   <script>
+// Skylines of History — War & Diplomacy Module (Phase 1)
+// Layered on top of SoH.Simulation without modifying it: wraps declareWar / makePeace / toggleAlliance /
+// orderArmyAction / recalculateProvince / tick / init and adds new APIs under SoH.WarDiplo.
+// All balance numbers come from SoH.BALANCE.war / SoH.BALANCE.diplomacy (js/balance.js).
+window.SoH = window.SoH || {};
+
+(function () {
+  'use strict';
+
+  var Sim = SoH.Simulation;
+  if (!Sim) return;
+
+  var UNIT_W = { infantry: 60, tank: 85, artillery: 70, airforce: 95, naval: 90 };
+  var DAY_PER_TICK = 1;
+
+  function BW() { return SoH.BALANCE.war; }
+  function BD() { return SoH.BALANCE.diplomacy; }
+  function S() { return SoH.state; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function rnd() { return Math.random(); }
+  function nat(id) { return S() && S().nations[id]; }
+  function isPlayer(id) { var s = S(); return !!s && (id === s.playerNationId || id === 'player'); }
+  function resolve(id) { var s = S(); return (!id || id === 'player') ? (s.playerNationId || 'turkiye') : id; }
+  function nm(n) { return n ? ((n.flag || '') + ' ' + (n.shortName || n.name)) : '?'; }
+  function log(text, type) { if (Sim.addLog) Sim.addLog(text, type || 'diplomacy'); }
+  function toast(msg, type) {
+    if (SoH.UI && typeof SoH.UI.showToast === 'function') SoH.UI.showToast(msg, type || 'info');
+  }
+  function pairKey(a, b) { return a < b ? a + '|' + b : b + '|' + a; }
+  function refresh() { if (SoH.UI && typeof SoH.UI.refresh === 'function') SoH.UI.refresh(); }
+
+  // ==========================================================================
+  // STATE
+  // ==========================================================================
+  function ensure() {
+    var s = S();
+    if (!s) return null;
+    if (!s.wd) {
+      s.wd = {
+        t: 0, cbs: [], wars: [], truces: {}, tributes: [], peaceOffers: [],
+        trade: [], embargoes: [], sanctions: [], intel: {}, cooldowns: {}, events: [], lastEvent: 0,
+        nukeCd: {}
+      };
+    }
+    Object.keys(s.nations).forEach(function (id) {
+      var n = s.nations[id];
+      if (!n || !n.id) return;
+      if (n.trust === undefined) n.trust = BD().trust.start;
+      if (n.warFatigue === undefined) n.warFatigue = 0;
+      if (n.fleets === undefined) n.fleets = (n.isPlayer || id === 'turkiye') ? 2 : 1;
+      if (n.spies === undefined) n.spies = 1;
+      if (n.overlord === undefined) n.overlord = null;
+      if (n.autonomy === undefined) n.autonomy = 0;
+    });
+    return s.wd;
+  }
+
+  // ==========================================================================
+  // HELPERS: terrain, composition, supply, morale
+  // ==========================================================================
+  function terrainOf(prov) {
+    if (prov._terrainType) return prov._terrainType;
+    var txt = (prov.specialtyName || '') + ' ' + (prov.name || '') + ' ' + (prov.cityName || '');
+    var t = null;
+    if (prov.isCapital) t = 'urban';
+    var kws = BW().terrainKeywords;
+    for (var i = 0; i < kws.length && !t; i++) if (kws[i].re.test(txt)) t = kws[i].type;
+    if (!t) t = prov.isAgroHub ? 'plains' : 'hills';
+    prov._terrainType = t;
+    return t;
+  }
+
+  function composition(prov, nation) {
+    var d = prov.divisions || { infantry: 1 };
+    var c = {
+      infantry: (d.infantry || 0) * UNIT_W.infantry,
+      tank: (d.tank || 0) * UNIT_W.tank,
+      artillery: (d.artillery || 0) * UNIT_W.artillery,
+      airforce: (d.airforce || 0) * UNIT_W.airforce,
+      naval: Math.min(3, (nation && nation.fleets) || 0) * UNIT_W.naval * 0.5
+    };
+    var sum = 0; Object.keys(c).forEach(function (k) { sum += c[k]; });
+    if (sum <= 0) { c.infantry = 1; sum = 1; }
+    Object.keys(c).forEach(function (k) { c[k] /= sum; });
+    return c;
+  }
+
+  function counterMult(att, def) {
+    var tbl = BW().unitCounters, total = 0;
+    Object.keys(att).forEach(function (a) {
+      Object.keys(def).forEach(function (d) {
+        total += att[a] * def[d] * ((tbl[a] && tbl[a][d]) || 1);
+      });
+    });
+    return total;
+  }
+
+  function supplyPenalty(fromProv, nation) {
+    var b = BW(), s = S(), cap = null;
+    Object.keys(s.provinces).forEach(function (id) {
+      var p = s.provinces[id];
+      if (p.owner === nation.id && p.isCapital && !cap) cap = p;
+    });
+    if (!cap) cap = fromProv;
+    var dx = (fromProv.center.x - cap.center.x), dy = (fromProv.center.y - cap.center.y);
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var pen = clamp(dist / b.supplyRangeWorldUnits, 0, 1) * b.supplyMaxPenalty;
+    pen -= ((fromProv.investments && fromProv.investments.logistics) || 0) * b.logisticsLevelRelief;
+    return clamp(pen, 0, b.supplyMaxPenalty);
+  }
+
+  function morale(prov, nation) {
+    var b = BW();
+    var m = b.moraleBase + ((prov.happiness || 70) - 70) * b.moraleHappinessWeight - ((nation && nation.warFatigue) || 0) * b.moraleFatigueWeight;
+    return clamp(m, b.moraleMin, b.moraleMax);
+  }
+
+  // ==========================================================================
+  // CASUS BELLI
+  // ==========================================================================
+  function activeCb(actorId, targetId) {
+    var wd = ensure(), best = null, t = wd.t;
+    var tbl = BW().casusBelli;
+    wd.cbs = wd.cbs.filter(function (c) { return c.expires > t; });
+    wd.cbs.forEach(function (c) {
+      if (c.actor === actorId && c.target === targetId) {
+        if (!best || tbl[c.type].trustPenalty < tbl[best.type].trustPenalty) best = c;
+      }
+    });
+    if (best) return best;
+    // Automatic justifications
+    var a = nat(actorId), tg = nat(targetId);
+    if (!a || !tg) return null;
+    var allies = a.allies || [];
+    for (var i = 0; i < allies.length; i++) {
+      var al = nat(allies[i]);
+      if (al && al.atWarWith.indexOf(targetId) !== -1) return { type: 'defense', auto: true };
+    }
+    if (wd.embargoes.some(function (e) { return e.by === targetId && e.target === actorId && e.expires > t; })) {
+      return { type: 'embargo', auto: true };
+    }
+    var s = S(), shares = false;
+    Object.keys(s.provinces).forEach(function (id) {
+      var p = s.provinces[id];
+      if (p.owner !== actorId || shares) return;
+      (p.neighbors || []).forEach(function (nid) {
+        var q = s.provinces[nid];
+        if (q && q.owner === targetId) shares = true;
+      });
+    });
+    if (shares && ((a.relations && a.relations[targetId]) || 50) < 45) return { type: 'border', auto: true };
+    // Liberation: target holds provinces originally belonging to the actor
+    var lib = Object.keys(s.provinces).some(function (id) {
+      var p = s.provinces[id];
+      return p.owner === targetId && p.occ && p.occ.from === actorId;
+    });
+    if (lib) return { type: 'liberation', auto: true };
+    return null;
+  }
+
+  function addCb(actorId, targetId, type) {
+    var wd = ensure();
+    wd.cbs.push({ actor: actorId, target: targetId, type: type, expires: wd.t + BW().cbExpiryDays });
+  }
+
+  function fabricateCb(actorId, targetId) {
+    actorId = resolve(actorId); targetId = resolve(targetId);
+    var wd = ensure(), a = nat(actorId), cost = BW().fabricateCbCost;
+    if (!a || !nat(targetId)) return { ok: false, reason: 'Devlet bulunamadı.' };
+    if (a.gold < cost) return { ok: false, reason: 'Casus belli uydurmak için ' + cost + ' altın gerekli.' };
+    if (wd.cbs.some(function (c) { return c.actor === actorId && c.target === targetId; }) || wd.cbs.some(function (c) { return c.pending && c.pending.actor === actorId && c.pending.target === targetId; })) {
+      return { ok: false, reason: 'Bu devlete karşı zaten bir casus belli hazırlanıyor/mevcut.' };
+    }
+    a.gold -= cost;
+    wd.cbs.push({ actor: actorId, target: targetId, type: 'fabricated', expires: wd.t + BW().fabricateCbDays + BW().cbExpiryDays, readyAt: wd.t + BW().fabricateCbDays, hidden: true });
+    log(nm(a) + ' diplomatik kanallarda ' + nm(nat(targetId)) + ' aleyhine belge hazırlıyor (' + BW().fabricateCbDays + ' gün).', 'diplomacy');
+    return { ok: true, days: BW().fabricateCbDays };
+  }
+
+  // ==========================================================================
+  // WARS: records, fatigue, allies
+  // ==========================================================================
+  function findWar(a, b) {
+    var wd = ensure();
+    for (var i = 0; i < wd.wars.length; i++) {
+      var w = wd.wars[i];
+      if ((w.a === a && w.d === b) || (w.a === b && w.d === a)) return w;
+    }
+    return null;
+  }
+  function warScoreOf(w, id) { return w ? (w.a === id ? w.scoreA : w.scoreD) : 0; }
+  function addScore(w, id, v) { if (!w) return; if (w.a === id) w.scoreA = clamp(w.scoreA + v, 0, 100); else w.scoreD = clamp(w.scoreD + v, 0, 100); }
+
+  function adjustAllRelations(excludeId, targetId, delta) {
+    var s = S();
+    Object.keys(s.nations).forEach(function (id) {
+      var n = s.nations[id];
+      if (!n || !n.id || id === excludeId || id === targetId) return;
+      n.relations[excludeId] = clamp((n.relations[excludeId] || 50) + delta, 0, 100);
+    });
+  }
+
+  var inJoin = false;
+  var origDeclareWar = Sim.declareWar;
+  Sim.declareWar = function (actorOrTarget, maybeTarget) {
+    var s = S(), wd = ensure();
+    var actorId = maybeTarget === undefined ? resolve('player') : resolve(actorOrTarget);
+    var targetId = maybeTarget === undefined ? resolve(actorOrTarget) : resolve(maybeTarget);
+    var a = nat(actorId), t = nat(targetId);
+    if (!a || !t || actorId === targetId) return origDeclareWar.call(this, actorOrTarget, maybeTarget);
+    if (a.atWarWith.indexOf(targetId) !== -1) return { ok: true };
+
+    if (a.overlord === targetId || t.overlord === actorId) {
+      return { ok: false, reason: 'Vasal ile hükümdar arasında savaş açılamaz. Önce vasallığı bitirin.' };
+    }
+    var truceEnd = wd.truces[pairKey(actorId, targetId)];
+    if (truceEnd && truceEnd > wd.t) {
+      return { ok: false, reason: 'Ateşkes sürüyor (' + (truceEnd - wd.t) + ' gün kaldı).' };
+    }
+
+    var wasAllied = a.allies.indexOf(targetId) !== -1;
+    var cb = activeCb(actorId, targetId);
+    if (cb && cb.type === 'fabricated' && cb.readyAt > wd.t) cb = null;   // not ready yet
+    var type = cb ? cb.type : 'none';
+    var rule = BW().casusBelli[type];
+
+    // Penalties
+    a.trust = clamp(a.trust - rule.trustPenalty - (wasAllied ? BD().trust.treatyBreakPenalty : 0), 0, 100);
+    if (rule.relationPenalty) adjustAllRelations(actorId, targetId, -Math.round(rule.relationPenalty * 0.35));
+    if (rule.stabilityPenalty) {
+      Object.keys(s.provinces).forEach(function (id) {
+        var p = s.provinces[id];
+        if (p.owner === actorId) p._wdStab = (p._wdStab || 0) + rule.stabilityPenalty;
+      });
+    }
+    if (cb && !cb.auto) wd.cbs = wd.cbs.filter(function (c) { return c !== cb; });
+
+    var res = origDeclareWar.call(this, actorId, targetId);
+    t.relations[actorId] = clamp((t.relations[actorId] || 50) - rule.relationPenalty, 0, 100);
+    a.relations[targetId] = clamp((a.relations[targetId] || 0), 0, 100);
+
+    wd.wars.push({ id: 'w' + wd.t + '_' + actorId + '_' + targetId, a: actorId, d: targetId, cb: type, start: wd.t, scoreA: 0, scoreD: 0, lostA: 0, lostD: 0 });
+    wd.trade = wd.trade.filter(function (x) { return pairKey(x.a, x.b) !== pairKey(actorId, targetId); });
+
+    log('📜 Casus belli: ' + rule.name + (rule.trustPenalty ? ' · güven −' + rule.trustPenalty : ''), 'war');
+    if (isPlayer(actorId) && SoH.UI) toast('Savaş ilanı: ' + rule.name + (rule.trustPenalty ? ' (itibar −' + rule.trustPenalty + ')' : ''), rule.trustPenalty > 10 ? 'warning' : 'info');
+
+    // Allies & vassals are pulled in
+    if (!inJoin) {
+      inJoin = true;
+      var chance = BD().alliance.joinWarChance;
+      (t.allies || []).concat(Object.keys(s.nations).filter(function (id) { return s.nations[id] && s.nations[id].overlord === targetId; })).forEach(function (id) {
+        var other = nat(id);
+        if (!other || id === actorId || other.atWarWith.indexOf(actorId) !== -1) return;
+        if (other.overlord === targetId || rnd() < chance) {
+          addCb(id, actorId, 'defense');
+          Sim.declareWar(id, actorId);
+        }
+      });
+      (a.allies || []).concat(Object.keys(s.nations).filter(function (id) { return s.nations[id] && s.nations[id].overlord === actorId; })).forEach(function (id) {
+        var other = nat(id);
+        if (!other || id === targetId || other.atWarWith.indexOf(targetId) !== -1) return;
+        if (other.overlord === actorId || rnd() < chance * 0.8) {
+          addCb(id, targetId, 'defense');
+          Sim.declareWar(id, targetId);
+        }
+      });
+      inJoin = false;
+    }
+    return res;
+  };
+
+  // ==========================================================================
+  // PEACE: white peace gate + negotiated treaties
+  // ==========================================================================
+  function warAge(w) { return ensure().t - w.start; }
+
+  function peaceDesire(nId, w) {
+    var n = nat(nId), other = (w.a === nId) ? w.d : w.a;
+    var own = warScoreOf(w, nId), theirs = warScoreOf(w, other);
+    return 10 + Math.min(25, warAge(w) * 0.25) + (n.warFatigue || 0) * 0.6 + (theirs - own) * 0.8;
+  }
+
+  var origMakePeace = Sim.makePeace;
+  function endWar(a, b, silent) {
+    var wd = ensure(), w = findWar(a, b);
+    var res = origMakePeace.call(Sim, a, b);
+    if (res && res.ok) {
+      wd.wars = wd.wars.filter(function (x) { return x !== w; });
+      wd.truces[pairKey(a, b)] = wd.t + (BW().truceDays || 90);
+      wd.peaceOffers = wd.peaceOffers.filter(function (o) { return pairKey(o.from, o.to) !== pairKey(a, b); });
+    }
+    return res;
+  }
+
+  Sim.makePeace = function (actorOrTarget, maybeTarget) {
+    var wd = ensure();
+    var actorId = maybeTarget === undefined ? resolve('player') : resolve(actorOrTarget);
+    var targetId = maybeTarget === undefined ? resolve(actorOrTarget) : resolve(maybeTarget);
+    var w = findWar(actorId, targetId);
+    if (!w) return origMakePeace.call(this, actorOrTarget, maybeTarget);
+    // Peace requested by someone else's offer, or accepted by the target AI?
+    var offer = wd.peaceOffers.some(function (o) { return o.from === targetId && o.to === actorId; });
+    var t = nat(targetId);
+    var desire = peaceDesire(targetId, w);
+    var forced = (t.warFatigue || 0) >= BW().fatigue.forcedPeaceAt;
+    var aiControlled = !isPlayer(targetId);
+    if (aiControlled && isPlayer(actorId) && !offer && !forced && desire < 30) {
+      return { ok: false, reason: nm(t) + ' barışa yanaşmıyor (isteklilik ' + Math.round(desire) + '/30). Savaş puanı kazanın veya bekleyin.' };
+    }
+    return endWar(actorId, targetId);
+  };
+
+  function peaceCost(terms, w, target) {
+    var P = BW().peace, s = S();
+    if (terms.type === 'white') return P.whitePeaceCost;
+    if (terms.type === 'tribute') return P.tributeCost;
+    if (terms.type === 'vassal') return P.vassalizeCost;
+    if (terms.type === 'colony') return P.colonizeCost;
+    if (terms.type === 'cede') {
+      var cost = 0;
+      (terms.provIds || []).forEach(function (id) {
+        var p = s.provinces[id]; if (!p) return;
+        cost += P.cedeCityCost * (p.isCapital ? 2 : 1) * (1 + (p.population || 0) / 20000000);
+      });
+      return Math.round(cost);
+    }
+    return 999;
+  }
+
+  function suggestCedeProvs(actorId, targetId) {
+    var s = S(), list = [];
+    Object.keys(s.provinces).forEach(function (id) {
+      var p = s.provinces[id];
+      if (p.owner === targetId) {
+        var nearOwn = (p.neighbors || []).some(function (nid) { return s.provinces[nid] && s.provinces[nid].owner === actorId; });
+        if (nearOwn) list.push(p);
+      }
+    });
+    list.sort(function (x, y) { return x.garrison - y.garrison; });
+    return list;
+  }
+
+  function negotiatePeace(actorId, targetId, terms) {
+    actorId = resolve(actorId); targetId = resolve(targetId);
+    var wd = ensure(), s = S(), a = nat(actorId), t = nat(targetId);
+    var w = findWar(actorId, targetId);
+    if (!a || !t || !w) return { ok: false, reason: 'Aktif bir savaş yok.' };
+    terms = terms || { type: 'white' };
+    if (terms.type === 'cede' && (!terms.provIds || !terms.provIds.length)) {
+      var sug = suggestCedeProvs(actorId, targetId);
+      if (!sug.length) return { ok: false, reason: 'Devredilebilecek sınır şehri yok.' };
+      terms.provIds = [sug[0].id];
+    }
+    var cost = peaceCost(terms, w, t);
+    var score = warScoreOf(w, actorId);
+    if (terms.type === 'white') return Sim.makePeace(actorId, targetId);
+    if (score < cost) return { ok: false, reason: 'Yetersiz savaş puanı (' + Math.round(score) + '/' + cost + ').' };
+
+    var forced = (t.warFatigue || 0) >= BW().fatigue.forcedPeaceAt;
+    var accept = forced || (score - cost + BW().peace.aiAcceptBias + peaceDesire(targetId, w) * 0.3) >= 0;
+    if (!isPlayer(targetId) && !accept) return { ok: false, reason: nm(t) + ' bu şartları reddetti.' };
+
+    var P = BW().peace, desc = '';
+    if (terms.type === 'cede') {
+      terms.provIds.forEach(function (id) {
+        var p = s.provinces[id]; if (!p || p.owner !== targetId) return;
+        p.owner = actorId;
+        p.occ = { from: targetId, assim: 0, unrest: BW().occupation.unrestMax, colony: false };
+        if (SoH.Simulation.recalculateProvince) SoH.Simulation.recalculateProvince(id, true);
+      });
+      desc = terms.provIds.length + ' şehir devredildi';
+    } else if (terms.type === 'tribute') {
+      wd.tributes.push({ payer: targetId, receiver: actorId, gold: P.tributeGoldPerTick, left: P.tributeTicks });
+      desc = 'haraç (' + P.tributeTicks + ' gün, günlük ' + P.tributeGoldPerTick + ')';
+    } else if (terms.type === 'vassal') {
+      t.overlord = actorId; t.autonomy = 0;
+      t.allies = t.allies.filter(function (id) { return a.atWarWith.indexOf(id) === -1; });
+      desc = 'vasallaştırıldı';
+    } else if (terms.type === 'colony') {
+      var taken = 0;
+      Object.keys(s.provinces).forEach(function (id) {
+        var p = s.provinces[id];
+        if (p.owner === actorId && p.occ && p.occ.from === targetId) {
+          p.occ.colony = true;
+          taken++;
+        }
+      });
+      if (!taken) return { ok: false, reason: 'Sömürgeleştirilecek işgal edilmiş şehir yok.' };
+      desc = taken + ' şehir sömürge statüsüne alındı';
+    }
+    log('📜 BARIŞ ŞARTLARI: ' + nm(a) + ' → ' + nm(t) + ': ' + desc + '.', 'diplomacy');
+    var res = endWar(actorId, targetId);
+    a.warFatigue = Math.max(0, a.warFatigue - 15);
+    return { ok: !!(res && res.ok), desc: desc };
+  }
+
+  // ==========================================================================
+  // ALLIANCE guard (trust)
+  // ==========================================================================
+  var origToggle = Sim.toggleAlliance;
+  Sim.toggleAlliance = function (actorOrTarget, maybeTarget) {
+    ensure();
+    var actorId = maybeTarget === undefined ? resolve('player') : resolve(actorOrTarget);
+    var targetId = maybeTarget === undefined ? resolve(actorOrTarget) : resolve(maybeTarget);
+    var a = nat(actorId), t = nat(targetId);
+    if (a && t) {
+      var was = a.allies.indexOf(targetId) !== -1;
+      if (!was) {
+        if (a.trust < BD().alliance.minTrust) {
+          return { ok: false, reason: 'İttifak için güven puanı en az ' + BD().alliance.minTrust + ' olmalı (mevcut: ' + Math.round(a.trust) + ').' };
+        }
+        if (a.overlord === targetId || t.overlord === actorId) return { ok: false, reason: 'Vasal ile ittifak kurulamaz.' };
+      }
+      var res = origToggle.call(this, actorOrTarget, maybeTarget);
+      if (was && res && res.ok) a.trust = clamp(a.trust - BD().trust.treatyBreakPenalty * 0.6, 0, 100);
+      return res;
+    }
+    return origToggle.call(this, actorOrTarget, maybeTarget);
+  };
+
+  // ==========================================================================
+  // COMBAT: wrapper injecting counters, terrain, supply, morale, fleets
+  // ==========================================================================
+  var origOrder = Sim.orderArmyAction;
+  Sim.orderArmyAction = function (fromId, toId, troopCount) {
+    var s = S(), wd = ensure();
+    var from = s.provinces[fromId], to = s.provinces[toId];
+    if (!from || !to || from.owner === to.owner) return origOrder.apply(this, arguments);
+
+    var att = nat(from.owner), def = nat(to.owner);
+    if (att && def) {
+      if (att.overlord === def.id || def.overlord === att.id) {
+        return { ok: false, reason: 'Vasal ile hükümdar birbirine saldıramaz.' };
+      }
+      var truce = wd.truces[pairKey(att.id, def.id)];
+      if (att.atWarWith.indexOf(def.id) === -1 && truce && truce > wd.t) {
+        return { ok: false, reason: 'Ateşkes sürüyor (' + (truce - wd.t) + ' gün).' };
+      }
+    }
+    // Make sure the war (and CB penalties) is declared via our wrapped version
+    if (att && def && att.atWarWith.indexOf(def.id) === -1) {
+      var dw = Sim.declareWar(att.id, def.id);
+      if (dw && dw.ok === false) return dw;
+    }
+
+    var b = BW();
+    var ter = b.terrain[terrainOf(to)];
+    var counter = counterMult(composition(from, att), composition(to, def));
+    var supply = supplyPenalty(from, att);
+    var mA = morale(from, att), mD = morale(to, def);
+    var fleetA = Math.min(5, att.fleets || 0) * 0.02, fleetD = Math.min(5, def.fleets || 0) * 0.02;
+    var f = counter * (1 - supply - ter.attackerSupplyPenalty) * (mA / mD) * (1 + fleetA) / (1 + fleetD);
+
+    var mb0 = att.militaryBonus || 0, db0 = to.defenseBonus;
+    att.militaryBonus = mb0 + (f - 1) * 100;
+    to.defenseBonus = (to.defenseBonus || 20) + ter.defense * 100;
+
+    var prevOwner = to.owner, garrBefore = to.garrison;
+    var res;
+    try {
+      res = origOrder.apply(this, arguments);
+    } finally {
+      att.militaryBonus = mb0;
+      to.defenseBonus = db0;
+    }
+    if (!res || !res.ok || res.type !== 'battle') return res;
+
+    res.mods = { counter: +counter.toFixed(2), terrain: ter.name, supply: +(supply * 100).toFixed(0) + '%', moraleA: +mA.toFixed(2), moraleD: +mD.toFixed(2), net: +f.toFixed(2) };
+    var w = findWar(att.id, def.id);
+    var F = b.fatigue;
+    if (to.owner !== prevOwner) {   // conquest
+      var cap = to.isCapital ? 2 : 1;
+      addScore(w, att.id, b.warScorePerCityCaptured * cap);
+      def.warFatigue = clamp((def.warFatigue || 0) + F.perCityLost * cap, 0, 100);
+      to.occ = { from: prevOwner === att.id ? (to.occ && to.occ.from) : prevOwner, assim: 0, unrest: b.occupation.unrestMax, colony: false };
+      if (w) { if (w.a === att.id) w.lostD++; else w.lostA++; }
+      log('🏴 ' + (to.cityName || to.name) + ' işgal edildi — asimilasyon başladı (isyan riski var).', 'war');
+    } else {                         // defended
+      addScore(w, def.id, b.warScorePerDefense);
+      att.warFatigue = clamp((att.warFatigue || 0) + F.perBattleLost, 0, 100);
+    }
+    if (isPlayer(att.id) || isPlayer(def.id)) {
+      toast('Çarpışma modları: karşı üstünlük ×' + res.mods.counter + ' · ' + ter.name + ' · ikmal −' + res.mods.supply + ' · moral ' + res.mods.moraleA + '/' + res.mods.moraleD, 'info');
+    }
+    return res;
+  };
+
+  // ==========================================================================
+  // PROVINCE RECALC: occupation / colony output modifiers + stability from CB
+  // ==========================================================================
+  var origRecalcProv = Sim.recalculateProvince;
+  Sim.recalculateProvince = function (provId, skip) {
+    var r = origRecalcProv.apply(this, arguments);
+    var p = S() && S().provinces[provId];
+    if (p) {
+      if (p._wdStab) {
+        p.happiness = clamp(p.happiness - p._wdStab, 10, 100);
+        p._wdStab = Math.max(0, p._wdStab - 0.4);
+      }
+      if (p.occ) {
+        var o = BW().occupation, k = 1 - (p.occ.assim || 0) / 100;
+        var penalty = p.occ.colony ? o.outputPenaltyWhileOccupied * 0.5 * k : o.outputPenaltyWhileOccupied * k;
+        var mult = p.occ.colony ? (1 + o.colonyTributeRate - penalty) : (1 - penalty);
+        p.goldIncome = Math.round(p.goldIncome * mult);
+        p.goldNet = Math.round(p.goldIncome - (p.maintenance || 0));
+        p.happiness = clamp(Math.round(p.happiness - (p.occ.unrest || 0) * 0.35), 10, 100);
+        Object.keys(p.resourceOutput || {}).forEach(function (rk) { p.resourceOutput[rk] = p.resourceOutput[rk] * (1 - penalty); });
+      }
+    }
+    return r;
+  };
+
+  // ==========================================================================
+  // STRATEGIC: fleets, blockade, nuclear
+  // ==========================================================================
+  function buildFleet(nid) {
+    nid = resolve(nid);
+    var n = nat(nid), c = BW().naval;
+    if (!n) return { ok: false, reason: 'Devlet bulunamadı.' };
+    if (n.gold < c.fleetCostGold || (n.stockpile.steel || 0) < c.fleetCostSteel) {
+      return { ok: false, reason: 'Filo için ' + c.fleetCostGold + ' altın + ' + c.fleetCostSteel + ' çelik gerekli.' };
+    }
+    n.gold -= c.fleetCostGold; n.stockpile.steel -= c.fleetCostSteel; n.fleets++;
+    log('⚓ ' + nm(n) + ' yeni bir donanma filosu denize indirdi (toplam ' + n.fleets + ').', 'war');
+    return { ok: true, fleets: n.fleets };
+  }
+
+  function setBlockade(actorId, targetId, on) {
+    actorId = resolve(actorId); targetId = resolve(targetId);
+    var wd = ensure(), a = nat(actorId), t = nat(targetId), c = BW().naval;
+    if (!a || !t) return { ok: false, reason: 'Devlet bulunamadı.' };
+    wd.blockades = wd.blockades || [];
+    if (!on) {
+      wd.blockades = wd.blockades.filter(function (x) { return !(x.by === actorId && x.target === targetId); });
+      return { ok: true, off: true };
+    }
+    if (a.atWarWith.indexOf(targetId) === -1) return { ok: false, reason: 'Abluka için savaşta olmalısınız.' };
+    if (a.fleets < c.blockadeFleetsNeeded) return { ok: false, reason: 'Abluka için en az ' + c.blockadeFleetsNeeded + ' filo gerekli.' };
+    if (wd.blockades.some(function (x) { return x.by === actorId && x.target === targetId; })) return { ok: false, reason: 'Abluka zaten sürüyor.' };
+    wd.blockades.push({ by: actorId, target: targetId });
+    log('⚓ ' + nm(a) + ', ' + nm(t) + ' limanlarına deniz ablukası uyguladı.', 'war');
+    return { ok: true };
+  }
+
+  function nuclearStrike(actorId, provId) {
+    actorId = resolve(actorId);
+    var wd = ensure(), s = S(), a = nat(actorId), p = s.provinces[provId], c = BW().nuclear;
+    if (!a || !p) return { ok: false, reason: 'Geçersiz hedef.' };
+    var t = nat(p.owner);
+    if (p.owner === actorId) return { ok: false, reason: 'Kendi şehrinize füze atamazsınız.' };
+    if (a.unlockedTechs.indexOf(c.requiredTech) === -1) return { ok: false, reason: 'Nükleer program teknolojisi gerekli.' };
+    if ((a.stockpile.uranium || 0) < c.uraniumCost || a.gold < c.goldCost) {
+      return { ok: false, reason: 'Gerekli: ' + c.uraniumCost + ' uranyum + ' + c.goldCost + ' altın.' };
+    }
+    if ((wd.nukeCd[actorId] || 0) > wd.t) return { ok: false, reason: 'Nükleer stok yenileniyor (' + (wd.nukeCd[actorId] - wd.t) + ' gün).' };
+    if (a.atWarWith.indexOf(p.owner) === -1) {
+      var dw = Sim.declareWar(actorId, p.owner);
+      if (dw && dw.ok === false) return dw;
+    }
+    a.stockpile.uranium -= c.uraniumCost; a.gold -= c.goldCost;
+    wd.nukeCd[actorId] = wd.t + c.cooldownDays;
+    p.garrison = Math.max(20, Math.round(p.garrison * (1 - c.garrisonLoss)));
+    p.population = Math.round(p.population * (1 - c.populationLoss));
+    if (p.divisions) { p.divisions.infantry = Math.max(1, Math.round((p.divisions.infantry || 1) * 0.35)); p.divisions.tank = Math.round((p.divisions.tank || 0) * 0.35); p.divisions.artillery = Math.round((p.divisions.artillery || 0) * 0.35); p.divisions.airforce = 0; }
+    a.trust = clamp(a.trust - c.globalTrustPenalty, 0, 100);
+    adjustAllRelations(actorId, p.owner, -c.relationPenaltyAll);
+    if (t) t.warFatigue = clamp((t.warFatigue || 0) + 12, 0, 100);
+    Sim.recalculateProvince(provId, true);
+    log('☢️ NÜKLEER SALDIRI: ' + nm(a) + ', ' + (p.cityName || p.name) + ' şehrini vurdu! Dünya kamuoyu tepkili.', 'war');
+    toast('☢️ ' + (p.cityName || p.name) + ' vuruldu. Küresel itibar −' + c.globalTrustPenalty, 'warning');
+    return { ok: true };
+  }
+
+  // ==========================================================================
+  // VASSALS
+  // ==========================================================================
+  function releaseVassal(overlordId, vassalId) {
+    overlordId = resolve(overlordId);
+    var v = nat(vassalId);
+    if (!v || v.overlord !== overlordId) return { ok: false, reason: 'Bu devlet vasalınız değil.' };
+    v.overlord = null; v.autonomy = 0;
+    var o = nat(overlordId); if (o) { o.relations[vassalId] = 80; v.relations[overlordId] = 85; o.trust = clamp(o.trust + 4, 0, 100); }
+    log('🕊️ ' + nm(v) + ' bağımsızlığına kavuştu.', 'diplomacy');
+    return { ok: true };
+  }
+
+  function annexVassal(overlordId, vassalId) {
+    overlordId = resolve(overlordId);
+    var s = S(), o = nat(overlordId), v = nat(vassalId);
+    if (!o || !v || v.overlord !== overlordId) return { ok: false, reason: 'Bu devlet vasalınız değil.' };
+    var provs = Object.keys(s.provinces).filter(function (id) { return s.provinces[id].owner === vassalId; });
+    var cost = provs.length * 40;
+    if (o.gold < cost) return { ok: false, reason: 'İlhak için ' + cost + ' altın gerekli.' };
+    o.gold -= cost;
+    provs.forEach(function (id) {
+      var p = s.provinces[id]; p.owner = overlordId;
+      p.occ = { from: vassalId, assim: 45, unrest: 25, colony: false };
+    });
+    v.overlord = null;
+    log('🏛️ ' + nm(o) + ', vasalı ' + nm(v) + ' devletini ilhak etti.', 'diplomacy');
+    return { ok: true, count: provs.length };
+  }
+
+  // ==========================================================================
+  // DIPLOMACY: trade agreements, embargo, sanctions, espionage
+  // ==========================================================================
+  function hasTrade(a, b) { return ensure().trade.some(function (x) { return pairKey(x.a, x.b) === pairKey(a, b) && x.expires > ensure().t; }); }
+  function hasEmbargo(by, target) { return ensure().embargoes.some(function (x) { return x.by === by && x.target === target && x.expires > ensure().t; }); }
+  function hasSanction(by, target) { return ensure().sanctions.some(function (x) { return x.by === by && x.target === target && x.expires > ensure().t; }); }
+
+  function proposeTrade(aId, bId) {
+    aId = resolve(aId); bId = resolve(bId);
+    var wd = ensure(), a = nat(aId), b = nat(bId), c = BD().trade;
+    if (!a || !b) return { ok: false, reason: 'Devlet bulunamadı.' };
+    if (a.atWarWith.indexOf(bId) !== -1) return { ok: false, reason: 'Savaştaki devletle ticaret anlaşması yapılamaz.' };
+    if (hasTrade(aId, bId)) return { ok: false, reason: 'Zaten ticaret anlaşmanız var.' };
+    if (hasEmbargo(aId, bId) || hasEmbargo(bId, aId)) return { ok: false, reason: 'Ambargo varken ticaret anlaşması yapılamaz.' };
+    if (a.gold < c.agreementCost) return { ok: false, reason: 'Anlaşma için ' + c.agreementCost + ' altın gerekli.' };
+    var rel = (a.relations && a.relations[bId]) || 50;
+    if (rel < c.minRelation) return { ok: false, reason: nm(b) + ' ilişkiler yetersiz olduğu için reddetti (' + Math.round(rel) + '/' + c.minRelation + ').' };
+    a.gold -= c.agreementCost;
+    wd.trade.push({ a: aId, b: bId, expires: wd.t + c.durationDays });
+    a.relations[bId] = clamp(rel + 5, 0, 100); b.relations[aId] = clamp((b.relations[aId] || 50) + 5, 0, 100);
+    log('🚢 TİCARET ANLAŞMASI: ' + nm(a) + ' ↔ ' + nm(b) + ' (+' + c.goldPerTick + ' altın/gün her iki taraf).', 'diplomacy');
+    return { ok: true };
+  }
+
+  function imposeEmbargo(aId, bId) {
+    aId = resolve(aId); bId = resolve(bId);
+    var wd = ensure(), a = nat(aId), b = nat(bId), c = BD().embargo;
+    if (!a || !b) return { ok: false, reason: 'Devlet bulunamadı.' };
+    if (hasEmbargo(aId, bId)) return { ok: false, reason: 'Zaten ambargo uyguluyorsunuz.' };
+    wd.embargoes.push({ by: aId, target: bId, expires: wd.t + c.durationDays });
+    wd.trade = wd.trade.filter(function (x) { return pairKey(x.a, x.b) !== pairKey(aId, bId); });
+    b.relations[aId] = clamp((b.relations[aId] || 50) - c.relationPenalty, 0, 100);
+    a.trust = clamp(a.trust - c.trustPenalty, 0, 100);
+    addCb(bId, aId, 'embargo');
+    log('⛔ AMBARGO: ' + nm(a) + ', ' + nm(b) + ' devletine ticaret ambargosu uyguladı.', 'diplomacy');
+    return { ok: true };
+  }
+
+  function liftEmbargo(aId, bId) {
+    aId = resolve(aId); bId = resolve(bId);
+    var wd = ensure();
+    wd.embargoes = wd.embargoes.filter(function (x) { return !(x.by === aId && x.target === bId); });
+    wd.sanctions = wd.sanctions.filter(function (x) { return !(x.by === aId && x.target === bId); });
+    return { ok: true };
+  }
+
+  function imposeSanctions(aId, bId) {
+    aId = resolve(aId); bId = resolve(bId);
+    var wd = ensure(), a = nat(aId), b = nat(bId), c = BD().sanctions;
+    if (!a || !b) return { ok: false, reason: 'Devlet bulunamadı.' };
+    if (hasSanction(aId, bId)) return { ok: false, reason: 'Yaptırım zaten sürüyor.' };
+    if (a.gold < c.cost) return { ok: false, reason: 'Yaptırım için ' + c.cost + ' altın gerekli.' };
+    a.gold -= c.cost;
+    wd.sanctions.push({ by: aId, target: bId, expires: wd.t + c.durationDays });
+    b.relations[aId] = clamp((b.relations[aId] || 50) - c.relationPenalty, 0, 100);
+    log('🚫 YAPTIRIM: ' + nm(a) + ' → ' + nm(b) + ' (ihracat gelirleri düşecek).', 'diplomacy');
+    return { ok: true };
+  }
+
+  function buySpy(nid) {
+    nid = resolve(nid);
+    var n = nat(nid), c = BD().espionage;
+    if (!n) return { ok: false, reason: 'Devlet bulunamadı.' };
+    if (n.gold < c.spyCost) return { ok: false, reason: 'Ajan için ' + c.spyCost + ' altın gerekli.' };
+    n.gold -= c.spyCost; n.spies++;
+    return { ok: true, spies: n.spies };
+  }
+
+  function pickProvince(nid, mode) {
+    var s = S(), list = Object.keys(s.provinces).map(function (id) { return s.provinces[id]; }).filter(function (p) { return p.owner === nid; });
+    if (!list.length) return null;
+    if (mode === 'strongest') list.sort(function (a, b) { return b.garrison - a.garrison; });
+    else list.sort(function () { return rnd() - 0.5; });
+    return list[0];
+  }
+
+  function spyMission(aId, bId, key) {
+    aId = resolve(aId); bId = resolve(bId);
+    var wd = ensure(), a = nat(aId), b = nat(bId), E = BD().espionage, m = E.missions[key];
+    if (!a || !b || !m || aId === bId) return { ok: false, reason: 'Geçersiz görev.' };
+    var cdKey = aId + '>' + bId;
+    if ((wd.cooldowns[cdKey] || 0) > wd.t) return { ok: false, reason: 'Ajanlar dinleniyor (' + (wd.cooldowns[cdKey] - wd.t) + ' gün).' };
+    if (a.gold < m.cost) return { ok: false, reason: m.name + ' için ' + m.cost + ' altın gerekli.' };
+    a.gold -= m.cost;
+    wd.cooldowns[cdKey] = wd.t + E.missionCooldownDays;
+    var chance = clamp(m.baseSuccess + (a.spies - 1) * 0.04 - (b.spies - 1) * 0.03, 0.1, 0.95);
+    var success = rnd() < chance;
+    var detected = rnd() < m.detectRisk * (success ? 0.6 : 1.5);
+    var msg = '';
+    if (success) {
+      if (key === 'intel') {
+        wd.intel[aId + '>' + bId] = { t: wd.t, gold: Math.round(b.gold), garrison: b.totalGarrison || 0, fleets: b.fleets, fatigue: Math.round(b.warFatigue), trust: Math.round(b.trust) };
+        msg = 'İstihbarat alındı: hazine ' + Math.round(b.gold) + ', donanma ' + b.fleets + ', savaş yorgunluğu %' + Math.round(b.warFatigue);
+      } else if (key === 'steal_gold') {
+        var amt = Math.round(b.gold * m.stealRate); b.gold -= amt; a.gold += amt; msg = amt + ' altın çalındı';
+      } else if (key === 'sabotage') {
+        var p = pickProvince(bId, 'strongest');
+        if (p) { p.garrison = Math.max(25, Math.round(p.garrison * (1 - m.garrisonLoss))); msg = (p.cityName || p.name) + ' garnizonu sabote edildi'; }
+      } else if (key === 'incite') {
+        var q = pickProvince(bId, 'random');
+        if (q) { q._wdStab = (q._wdStab || 0) + m.unrest; if (q.occ) q.occ.unrest = clamp(q.occ.unrest + m.unrest, 0, 100); msg = (q.cityName || q.name) + ' şehrinde huzursuzluk çıktı'; }
+      } else if (key === 'tech') {
+        var st = Math.min(m.researchSteal, Math.round(b.research)); b.research -= st; a.research += st; msg = st + ' araştırma puanı çalındı';
+      }
+    } else msg = 'Görev başarısız oldu';
+    if (detected) {
+      b.relations[aId] = clamp((b.relations[aId] || 50) - E.detectedRelationPenalty, 0, 100);
+      a.trust = clamp(a.trust - E.detectedTrustPenalty, 0, 100);
+      msg += ' — AJANLAR YAKALANDI! (ilişki −' + E.detectedRelationPenalty + ')';
+      a.spies = Math.max(1, a.spies - 1);
+      log('🕵️ ' + nm(b) + ', ' + nm(a) + ' casuslarını yakaladı!', 'diplomacy');
+    } else if (success && isPlayer(aId) === false && isPlayer(bId)) {
+      log('🕵️ ' + nm(b) + ' içinde şüpheli faaliyet: ' + msg, 'diplomacy');
+    }
+    return { ok: success, msg: msg, detected: detected, reason: success ? undefined : msg };
+  }
+
+  // ==========================================================================
+  // WORLD EVENTS
+  // ==========================================================================
+  var EVENTS = [
+    { id: 'oil_crisis', name: '🛢️ Küresel Petrol Krizi', run: function (ctx) {
+      Object.keys(S().nations).forEach(function (id) { var n = nat(id); if (n && n.id && (n.stockpile.oil || 0) > 150) n.gold += 80; else if (n && n.id) n.gold = Math.max(0, n.gold - 60); });
+      return 'Petrol stoku yüksek ülkeler kazandı, diğerleri hazine kaybetti.'; } },
+    { id: 'summit', name: '🕊️ Dünya Barış Zirvesi', run: function () {
+      Object.keys(S().nations).forEach(function (id) { var n = nat(id); if (!n || !n.id) return; Object.keys(n.relations).forEach(function (o) { n.relations[o] = clamp(n.relations[o] + 4, 0, 100); }); n.warFatigue = Math.max(0, (n.warFatigue || 0) - 4); });
+      return 'Tüm ilişkiler +4, savaş yorgunluğu azaldı.'; } },
+    { id: 'border_incident', name: '⚠️ Sınır Olayı', run: function (ctx) {
+      var s = S(), cand = [];
+      Object.keys(s.provinces).forEach(function (id) { var p = s.provinces[id]; (p.neighbors || []).forEach(function (nid) { var q = s.provinces[nid]; if (q && q.owner !== p.owner && p.owner < q.owner) cand.push([p.owner, q.owner]); }); });
+      if (!cand.length) return null;
+      var c = cand[Math.floor(rnd() * cand.length)], A = nat(c[0]), B = nat(c[1]);
+      A.relations[c[1]] = clamp((A.relations[c[1]] || 50) - 15, 0, 100); B.relations[c[0]] = clamp((B.relations[c[0]] || 50) - 15, 0, 100);
+      addCb(c[0], c[1], 'border'); addCb(c[1], c[0], 'border');
+      return nm(A) + ' ve ' + nm(B) + ' arasında sınır olayı: karşılıklı casus belli oluştu.'; } },
+    { id: 'scandal', name: '📰 Diplomatik Skandal', run: function () {
+      var ids = Object.keys(S().nations).filter(function (id) { return nat(id) && nat(id).id; });
+      var n = nat(ids[Math.floor(rnd() * ids.length)]); n.trust = clamp(n.trust - 14, 0, 100);
+      return nm(n) + ' gizli anlaşma skandalı yaşadı (güven −14).'; } },
+    { id: 'aid', name: '🌾 Uluslararası Kıtlık Yardımı', run: function () {
+      var ids = Object.keys(S().nations).filter(function (id) { return nat(id) && nat(id).id; });
+      var n = nat(ids[Math.floor(rnd() * ids.length)]); n.stockpile.grain = (n.stockpile.grain || 0) + 120; n.trust = clamp(n.trust + 3, 0, 100);
+      return nm(n) + ' uluslararası tahıl yardımı aldı.'; } },
+    { id: 'arms_race', name: '🚀 Silahlanma Yarışı', run: function () {
+      Object.keys(S().nations).forEach(function (id) { var n = nat(id); if (n && n.id && n.weapons) Object.keys(n.weapons).forEach(function (w) { n.weapons[w] += 10; }); });
+      return 'Tüm devletler silah stoklarını artırdı.'; } }
+  ];
+
+  function runWorldEvent() {
+    var wd = ensure();
+    var ev = EVENTS[Math.floor(rnd() * EVENTS.length)];
+    var text = ev.run();
+    if (!text) return;
+    wd.events.unshift({ t: wd.t, id: ev.id, name: ev.name, text: text });
+    if (wd.events.length > 25) wd.events.length = 25;
+    log(ev.name + ': ' + text, 'diplomacy');
+    toast(ev.name + ' — ' + text, 'info');
+  }
+
+  // ==========================================================================
+  // TICK
+  // ==========================================================================
+  function tickWD() {
+    var s = S(), wd = ensure();
+    if (!s || !wd) return;
+    wd.t += DAY_PER_TICK;
+    var F = BW().fatigue, O = BW().occupation, V = BW().vassal, Dp = BD();
+
+    // trust recovery + fatigue + fleet upkeep
+    Object.keys(s.nations).forEach(function (id) {
+      var n = s.nations[id]; if (!n || !n.id) return;
+      n.trust = clamp(n.trust + (Dp.trust.start - n.trust) * Dp.trust.recoverPerTick * 0.1 + Dp.trust.recoverPerTick, 0, 100);
+      var wars = n.atWarWith.length;
+      if (wars > 0) {
+        n.warFatigue = clamp(n.warFatigue + F.perTickAtWar * (1 + (wars - 1) * 0.3), 0, 100);
+        if (n.warFatigue >= F.goldPenaltyAt) n.gold = Math.max(0, n.gold - Math.round((n.warFatigue - F.goldPenaltyAt) * 0.3));
+        if (n.warFatigue >= F.happinessPenaltyAt) {
+          Object.keys(s.provinces).forEach(function (pid) { var p = s.provinces[pid]; if (p.owner === id) p._wdStab = Math.max(p._wdStab || 0, (n.warFatigue - F.happinessPenaltyAt) * 0.25); });
+        }
+      } else n.warFatigue = clamp(n.warFatigue - F.recoveryAtPeace, 0, 100);
+      if (n.fleets > 0 && wd.t % 4 === 0) n.gold = Math.max(0, n.gold - n.fleets * BW().naval.fleetUpkeep);
+    });
+
+    // war score ticks for occupation, AI peace offers & forced peace
+    wd.wars.slice().forEach(function (w) {
+      var occA = 0, occD = 0;
+      Object.keys(s.provinces).forEach(function (id) {
+        var p = s.provinces[id];
+        if (p.owner === w.a && p.occ && p.occ.from === w.d) occA++;
+        if (p.owner === w.d && p.occ && p.occ.from === w.a) occD++;
+      });
+      addScore(w, w.a, occA * BW().warScoreOccupationPerTick);
+      addScore(w, w.d, occD * BW().warScoreOccupationPerTick);
+      [w.a, w.d].forEach(function (nid) {
+        var other = nid === w.a ? w.d : w.a;
+        if (isPlayer(nid)) return;
+        var n = nat(nid);
+        if (!n || n.atWarWith.indexOf(other) === -1) return;
+        var desire = peaceDesire(nid, w);
+        if (n.warFatigue >= F.forcedPeaceAt || desire >= 55) {
+          if (isPlayer(other)) {
+            if (!wd.peaceOffers.some(function (o) { return o.from === nid && o.to === other; })) {
+              wd.peaceOffers.push({ from: nid, to: other, t: wd.t });
+              toast('🕊️ ' + nm(n) + ' barış teklif ediyor! Ülkeler panelinden kabul edebilirsiniz.', 'info');
+            }
+          } else {
+            endWar(nid, other);
+          }
+        }
+      });
+    });
+    wd.peaceOffers = wd.peaceOffers.filter(function (o) { return nat(o.from) && nat(o.from).atWarWith.indexOf(o.to) !== -1; });
+
+    // occupation assimilation, unrest & riots
+    Object.keys(s.provinces).forEach(function (pid) {
+      var p = s.provinces[pid];
+      if (!p.occ) return;
+      var rate = O.assimilationPerTick * (p.occ.colony ? O.colonyAssimilationFactor : 1) * (1 + Math.min(1, (p.garrison || 0) / 400) * 0.5);
+      p.occ.assim = clamp(p.occ.assim + rate, 0, 100);
+      p.occ.unrest = clamp(p.occ.unrest - rate * O.unrestDecayPerAssimilation, 0, 100);
+      if (p.occ.assim >= 100) {
+        log('✅ ' + (p.cityName || p.name) + ' tamamen asimile edildi.', 'info');
+        p.occ = null; return;
+      }
+      if (p.occ.unrest > 35 && p.garrison < 120 && rnd() < O.riotChancePerTick * (p.occ.colony ? 1.4 : 1)) {
+        p.garrison = Math.max(25, Math.round(p.garrison * 0.78));
+        if (p.garrison < 55 && p.occ.from && nat(p.occ.from) && p.owner !== p.occ.from) {
+          var old = p.owner; p.owner = p.occ.from; p.occ = null;
+          log('🔥 İSYAN: ' + (p.cityName || p.name) + ' halkı ayaklandı ve ' + nm(nat(p.owner)) + ' yönetimine döndü!', 'war');
+          if (isPlayer(old)) toast('İsyan! ' + (p.cityName || p.name) + ' elden gitti.', 'warning');
+          if (Sim.recalculateProvince) Sim.recalculateProvince(pid, true);
+        } else {
+          log('✊ ' + (p.cityName || p.name) + ' işgal altında protesto/isyan çıktı (garnizon zayıfladı).', 'war');
+        }
+      }
+    });
+
+    // vassals: tribute & autonomy
+    Object.keys(s.nations).forEach(function (id) {
+      var v = s.nations[id]; if (!v || !v.id || !v.overlord) return;
+      var o = nat(v.overlord);
+      if (!o) { v.overlord = null; return; }
+      var tribute = Math.max(0, Math.round((v.goldNet || 0) * 0.25 * V.tributeRate));
+      v.gold = Math.max(0, v.gold - tribute); o.gold += tribute;
+      v.autonomy = clamp(v.autonomy + V.autonomyGainPerTick, 0, 100);
+      if (v.autonomy >= V.independenceAt) {
+        v.overlord = null; v.autonomy = 0;
+        o.relations[id] = 15; v.relations[v.overlord || o.id] = 10;
+        log('🚩 ' + nm(v) + ' bağımsızlığını ilan etti!', 'war');
+      }
+    });
+
+    // tributes from peace deals
+    wd.tributes = wd.tributes.filter(function (tr) {
+      var p = nat(tr.payer), r = nat(tr.receiver);
+      if (!p || !r) return false;
+      var amt = Math.min(tr.gold, p.gold); p.gold -= amt; r.gold += amt;
+      tr.left--; return tr.left > 0;
+    });
+
+    // trade agreements, embargoes, sanctions, blockades
+    wd.trade = wd.trade.filter(function (x) {
+      if (x.expires <= wd.t) return false;
+      var a = nat(x.a), b = nat(x.b);
+      if (!a || !b || a.atWarWith.indexOf(x.b) !== -1) return false;
+      a.gold += Dp.trade.goldPerTick; b.gold += Dp.trade.goldPerTick;
+      a.relations[x.b] = clamp((a.relations[x.b] || 50) + Dp.trade.relationBoostPerTick, 0, 100);
+      b.relations[x.a] = clamp((b.relations[x.a] || 50) + Dp.trade.relationBoostPerTick, 0, 100);
+      return true;
+    });
+    wd.embargoes = wd.embargoes.filter(function (x) {
+      if (x.expires <= wd.t) return false;
+      var t = nat(x.target), by = nat(x.by);
+      if (t) t.gold = Math.max(0, t.gold - Dp.embargo.targetGoldDrainPerTick);
+      if (by) by.gold = Math.max(0, by.gold - Dp.embargo.imposerTradeLoss);
+      return true;
+    });
+    wd.sanctions = wd.sanctions.filter(function (x) {
+      if (x.expires <= wd.t) return false;
+      var t = nat(x.target);
+      if (t && t.tradeRevenue) t.gold = Math.max(0, t.gold - Math.round(t.tradeRevenue * (1 - Dp.sanctions.targetRevenueMult) / 3));
+      return true;
+    });
+    (wd.blockades || []).slice().forEach(function (bl) {
+      var by = nat(bl.by), t = nat(bl.target);
+      if (!by || !t || by.atWarWith.indexOf(bl.target) === -1 || by.fleets < BW().naval.blockadeFleetsNeeded) { setBlockade(bl.by, bl.target, false); return; }
+      t.gold = Math.max(0, t.gold - BW().naval.blockadeGoldDrain - Math.round((t.tradeRevenue || 0) * BW().naval.blockadeTradePenalty / 3));
+    });
+
+    // fabricated CB becomes visible
+    wd.cbs.forEach(function (c) { if (c.hidden && c.readyAt <= wd.t) { c.hidden = false; if (isPlayer(c.actor)) toast('Uydurma casus belli hazır: ' + nm(nat(c.target)), 'success'); } });
+
+    // world events
+    if (wd.t - wd.lastEvent >= Dp.events.everyDays && rnd() < Dp.events.chanceEachCheck) {
+      wd.lastEvent = wd.t; runWorldEvent();
+    }
+  }
+
+  var origTick = Sim.tick;
+  Sim.tick = function () {
+    ensure();
+    try { tickWD(); } catch (e) { if (window.console) console.error('WarDiplo tick error', e); }
+    return origTick.apply(this, arguments);
+  };
+  var origInit = Sim.init;
+  Sim.init = function () {
+    var r = origInit.apply(this, arguments);
+    ensure();
+    return r;
+  };
+  ensure();
+
+  // ==========================================================================
+  // UI HELPERS (rendered inside ui.js "Ülkeler" panel)
+  // ==========================================================================
+  function attitude(rel) {
+    var list = BD().attitudes;
+    for (var i = 0; i < list.length; i++) if (rel >= list[i].min) return list[i];
+    return list[list.length - 1];
+  }
+
+  function nationInfo(pid, nid) {
+    var wd = ensure(), p = nat(pid), n = nat(nid);
+    if (!p || !n) return '';
+    var rel = Math.round((p.relations && p.relations[nid]) || 50), at = attitude(rel);
+    var parts = [];
+    parts.push('<span style="color:' + at.color + ';font-weight:700">' + at.label + ' (' + rel + ')</span>');
+    parts.push('Güven ' + Math.round(n.trust));
+    if (n.overlord) parts.push('👑 Vasal: ' + (nat(n.overlord) ? nat(n.overlord).shortName : '?'));
+    if (hasTrade(pid, nid)) parts.push('🚢 Ticaret anl.');
+    if (hasEmbargo(pid, nid)) parts.push('⛔ Ambargomuz');
+    if (hasEmbargo(nid, pid)) parts.push('⛔ Bize ambargo');
+    if (hasSanction(pid, nid)) parts.push('🚫 Yaptırım');
+    var cb = activeCb(pid, nid);
+    if (cb) parts.push('📜 CB: ' + BW().casusBelli[cb.type].name + (cb.readyAt > wd.t ? ' (' + (cb.readyAt - wd.t) + 'g)' : ''));
+    var truce = wd.truces[pairKey(pid, nid)];
+    if (truce && truce > wd.t) parts.push('🕊️ Ateşkes ' + (truce - wd.t) + 'g');
+    var w = findWar(pid, nid), extra = '';
+    if (w) {
+      var my = warScoreOf(w, pid), th = warScoreOf(w, nid);
+      extra = '<div style="margin-top:4px;font-size:10.5px;color:#fca5a5">⚔️ Savaş puanı <b>' + Math.round(my) + '</b> – ' + Math.round(th) + ' · yorgunluk bizde %' + Math.round(p.warFatigue) + ', onda %' + Math.round(n.warFatigue) + ' · barış isteği: ' + Math.round(peaceDesire(nid, w)) + '/30</div>';
+    }
+    var intel = wd.intel[pid + '>' + nid];
+    if (intel && wd.t - intel.t < 60) {
+      extra += '<div style="font-size:10.5px;color:#7dd3fc">🕵️ İstihbarat (' + (wd.t - intel.t) + 'g önce): hazine ' + intel.gold + ' · donanma ' + intel.fleets + ' · yorgunluk %' + intel.fatigue + '</div>';
+    }
+    return '<div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px">' + parts.join(' · ') + '</div>' + extra;
+  }
+
+  function btn(label, action, a, b, extra, color) {
+    return '<button class="pill-btn"' + (color ? ' style="color:' + color + '"' : '') + ' onclick="SoH.WarDiplo.act(\'' + action + '\',\'' + a + '\',\'' + b + '\'' + (extra ? ',\'' + extra + '\'' : '') + ')">' + label + '</button>';
+  }
+
+  function nationButtons(pid, nid) {
+    var wd = ensure(), p = nat(pid), n = nat(nid);
+    if (!p || !n) return '';
+    var w = findWar(pid, nid), out = [], E = BD().espionage, P = BW().peace;
+    if (w) {
+      var sc = Math.round(warScoreOf(w, pid));
+      if (wd.peaceOffers.some(function (o) { return o.from === nid && o.to === pid; })) out.push(btn('✅ Barış Teklifini Kabul Et', 'peace', pid, nid, 'white', '#86efac'));
+      out.push(btn('🏳️ Beyaz Barış', 'peace', pid, nid, 'white'));
+      out.push(btn('🏙️ Şehir Al (' + sc + '/' + P.cedeCityCost + '+)', 'peace', pid, nid, 'cede'));
+      out.push(btn('💰 Haraç (' + sc + '/' + P.tributeCost + ')', 'peace', pid, nid, 'tribute'));
+      out.push(btn('👑 Vasallaştır (' + sc + '/' + P.vassalizeCost + ')', 'peace', pid, nid, 'vassal'));
+      out.push(btn('🏴 Sömürge (' + sc + '/' + P.colonizeCost + ')', 'peace', pid, nid, 'colony'));
+      var hasBl = (wd.blockades || []).some(function (x) { return x.by === pid && x.target === nid; });
+      out.push(btn(hasBl ? '⚓ Ablukayı Kaldır' : '⚓ Deniz Ablukası', 'blockade', pid, nid, hasBl ? 'off' : 'on'));
+      out.push(btn('☢️ Nükleer Saldırı', 'nuke', pid, nid));
+    } else {
+      if (!activeCb(pid, nid) && !wd.cbs.some(function (c) { return c.actor === pid && c.target === nid; })) out.push(btn('📜 Casus Belli Uydur (' + BW().fabricateCbCost + '₺)', 'cb', pid, nid));
+      out.push(btn(hasTrade(pid, nid) ? '🚢 Anlaşma Aktif' : '🚢 Ticaret Anlaşması (' + BD().trade.agreementCost + '₺)', 'trade', pid, nid));
+      out.push(btn(hasEmbargo(pid, nid) ? '⛔ Ambargoyu Kaldır' : '⛔ Ambargo', hasEmbargo(pid, nid) ? 'lift' : 'embargo', pid, nid));
+      out.push(btn('🚫 Yaptırım (' + BD().sanctions.cost + '₺)', 'sanction', pid, nid));
+      if (n.overlord === pid) {
+        out.push(btn('🕊️ Vasalı Serbest Bırak', 'release', pid, nid));
+        out.push(btn('🏛️ İlhak Et', 'annex', pid, nid));
+      }
+    }
+    Object.keys(E.missions).forEach(function (k) { out.push(btn('🕵️ ' + E.missions[k].name + ' (' + E.missions[k].cost + '₺)', 'spy', pid, nid, k)); });
+    return '<div class="pill-group" style="margin-top:6px;flex-wrap:wrap">' + out.join('') + '</div>';
+  }
+
+  function act(action, a, b, extra) {
+    var r;
+    try {
+      if (action === 'peace') r = negotiatePeace(a, b, { type: extra });
+      else if (action === 'cb') r = fabricateCb(a, b);
+      else if (action === 'trade') r = proposeTrade(a, b);
+      else if (action === 'embargo') r = imposeEmbargo(a, b);
+      else if (action === 'lift') r = liftEmbargo(a, b);
+      else if (action === 'sanction') r = imposeSanctions(a, b);
+      else if (action === 'spy') r = spyMission(a, b, extra);
+      else if (action === 'blockade') r = setBlockade(a, b, extra === 'on');
+      else if (action === 'nuke') {
+        var best = pickProvince(b, 'strongest');
+        r = best ? nuclearStrike(a, best.id) : { ok: false, reason: 'Hedef bulunamadı.' };
+      }
+      else if (action === 'release') r = releaseVassal(a, b);
+      else if (action === 'annex') r = annexVassal(a, b);
+    } catch (e) { r = { ok: false, reason: 'Hata: ' + e.message }; }
+    if (r) {
+      if (r.ok === false) toast(r.reason || r.msg || 'İşlem yapılamadı.', 'warning');
+      else if (r.msg) toast('🕵️ ' + r.msg, r.detected ? 'warning' : 'success');
+      else if (r.desc) toast('📜 ' + r.desc, 'success');
+    }
+    refresh();
+  }
+
+  SoH.WarDiplo = {
+    ensure: ensure,
+    activeCb: activeCb,
+    fabricateCb: fabricateCb,
+    findWar: findWar,
+    negotiatePeace: negotiatePeace,
+    peaceDesire: peaceDesire,
+    buildFleet: buildFleet,
+    setBlockade: setBlockade,
+    nuclearStrike: nuclearStrike,
+    releaseVassal: releaseVassal,
+    annexVassal: annexVassal,
+    proposeTrade: proposeTrade,
+    imposeEmbargo: imposeEmbargo,
+    liftEmbargo: liftEmbargo,
+    imposeSanctions: imposeSanctions,
+    buySpy: buySpy,
+    spyMission: spyMission,
+    attitude: attitude,
+    terrainOf: terrainOf,
+    runWorldEvent: runWorldEvent,
+    nationInfo: nationInfo,
+    nationButtons: nationButtons,
+    act: act
+  };
+})();
+
+</script>
+  <script>
+// Skylines of History — Advanced Economy, Production Chains & Dynamic Commodity Market (Phase 2)
+// Implements:
+// 1. Multi-tier Production Chains (Raw -> Factory -> Value-added Goods)
+// 2. Real-time Global Supply/Demand Commodity Exchange with Fluctuation Trends
+// 3. Macroeconomics: Inflation Rate, Central Bank Interest Policy, Sovereign Debt & Bond Ratings
+// 4. Customs Tariffs, Foreign Trade Deficit & Logistics Risk
+window.SoH = window.SoH || {};
+
+(function () {
+  'use strict';
+
+  function BE() { return (SoH.BALANCE && SoH.BALANCE.economy) || {}; }
+  function S() { return SoH.state; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function nat(id) { return S() && S().nations && S().nations[id]; }
+  function resolve(id) { var s = S(); return (!id || id === 'player') ? (s && s.playerNationId ? s.playerNationId : 'turkiye') : id; }
+  function toast(msg, type) { if (SoH.UI && typeof SoH.UI.showToast === 'function') SoH.UI.showToast(msg, type || 'info'); }
+  function refresh() { if (SoH.UI && typeof SoH.UI.refresh === 'function') SoH.UI.refresh(); }
+
+  const PROCESSED_KEYS = ['steel', 'packaged_food', 'fuel_energy', 'consumer_goods', 'enriched_uranium'];
+  const ALL_MARKET_KEYS = ['iron', 'oil', 'uranium', 'gold_ore', 'minerals', 'grain', 'livestock', 'steel', 'packaged_food', 'fuel_energy', 'consumer_goods', 'enriched_uranium'];
+
+  const GOOD_INFO = {
+    iron: { name: 'Demir', icon: '⛓️', category: 'Ham Madde' },
+    oil: { name: 'Ham Petrol', icon: '🛢️', category: 'Enerji' },
+    uranium: { name: 'Uranyum', icon: '☢️', category: 'Stratejik' },
+    gold_ore: { name: 'Altın Cevheri', icon: '🪙', category: 'Değerli Maden' },
+    minerals: { name: 'Bor / Mineraller', icon: '💎', category: 'Stratejik Cevher' },
+    grain: { name: 'Tahıl / Buğday', icon: '🌾', category: 'Tarım' },
+    livestock: { name: 'Besi / Hayvancılık', icon: '🐄', category: 'Gıda' },
+    steel: { name: 'Alaşımlı Çelik', icon: '⚙️', category: 'Sanayi Ürünü' },
+    packaged_food: { name: 'Paketli Gıda', icon: '🥫', category: 'Tüketim' },
+    fuel_energy: { name: 'Rafine Yakıt', icon: '⚡', category: 'Sanayi Enerjisi' },
+    consumer_goods: { name: 'Tüketim Malları', icon: '📱', category: 'Halk Refahı' },
+    enriched_uranium: { name: 'Zenginleştirilmiş Nükleer Yakıt', icon: '⚛️', category: 'Nükleer Teknoloji' }
+  };
+
+  function ensureEconomy() {
+    const s = S();
+    if (!s) return null;
+    if (!s.economy) {
+      s.economy = {
+        tick: 0,
+        prices: Object.assign({}, (BE().basePrices || {})),
+        priceHistory: {},
+        globalSupply: {},
+        globalDemand: {}
+      };
+      ALL_MARKET_KEYS.forEach(k => {
+        s.economy.priceHistory[k] = [s.economy.prices[k] || 20];
+        s.economy.globalSupply[k] = 100;
+        s.economy.globalDemand[k] = 100;
+      });
+    }
+
+    // Ensure all nations have macroeconomic and processed stockpile fields
+    Object.keys(s.nations || {}).forEach(nId => {
+      const n = s.nations[nId];
+      if (!n || !n.id) return;
+      if (!n.stockpile) n.stockpile = {};
+      PROCESSED_KEYS.forEach(pk => {
+        if (n.stockpile[pk] === undefined) {
+          n.stockpile[pk] = (n.isPlayer || nId === 'turkiye') ? 60 : 40;
+        }
+      });
+      if (n.inflationRate === undefined) n.inflationRate = 2.8;
+      if (n.interestRate === undefined) n.interestRate = 5.0;
+      if (n.nationalDebt === undefined) n.nationalDebt = 0;
+      if (n.customsTariff === undefined) n.customsTariff = 10;
+      if (n.customsRevenue === undefined) n.customsRevenue = 0;
+      if (n.bondRating === undefined) n.bondRating = 'AAA';
+      if (n.chainOutputDaily === undefined) n.chainOutputDaily = {};
+    });
+
+    return s.economy;
+  }
+
+  // ============================================================================
+  // 1. PRODUCTION CHAINS ENGINE (Raw Materials -> Factories -> Finished Goods)
+  // ============================================================================
+  function runProductionChains() {
+    const s = S();
+    if (!s || !s.nations || !s.provinces) return;
+    const chains = (BE().chains || {});
+
+    Object.keys(s.nations).forEach(nId => {
+      const n = s.nations[nId];
+      if (!n || !n.stockpile) return;
+
+      // Count investment facilities in owned provinces
+      let refineryCount = 0;
+      let farmCount = 0;
+      let logisticsCount = 0;
+      let researchCount = 0;
+      let armsPlantCount = 0;
+
+      Object.values(s.provinces).forEach(p => {
+        if (p.owner === nId && p.investments) {
+          refineryCount += p.investments.refinery || 0;
+          farmCount += p.investments.farm || 0;
+          logisticsCount += p.investments.logistics || 0;
+          researchCount += p.investments.research_hub || 0;
+          armsPlantCount += p.investments.arms_plant || 0;
+        }
+      });
+
+      // Chain 1: Steel (Iron + Minerals -> Steel) in Refineries
+      const steelRef = chains.steel;
+      if (steelRef && refineryCount > 0) {
+        const potential = refineryCount * steelRef.baseYield * 0.35;
+        const reqIron = potential * steelRef.inputs.iron;
+        const reqMin = potential * steelRef.inputs.minerals;
+        if ((n.stockpile.iron || 0) >= reqIron && (n.stockpile.minerals || 0) >= reqMin) {
+          n.stockpile.iron -= reqIron;
+          n.stockpile.minerals -= reqMin;
+          n.stockpile.steel = (n.stockpile.steel || 0) + potential;
+          n.chainOutputDaily.steel = Math.round(potential * 3);
+        } else {
+          n.chainOutputDaily.steel = 0;
+        }
+      }
+
+      // Chain 2: Packaged Food (Grain + Livestock -> Packaged Food) in Modern Farms
+      const foodRef = chains.packaged_food;
+      if (foodRef && farmCount > 0) {
+        const potential = farmCount * foodRef.baseYield * 0.35;
+        const reqGrain = potential * foodRef.inputs.grain;
+        const reqLive = potential * foodRef.inputs.livestock;
+        if ((n.stockpile.grain || 0) >= reqGrain && (n.stockpile.livestock || 0) >= reqLive) {
+          n.stockpile.grain -= reqGrain;
+          n.stockpile.livestock -= reqLive;
+          n.stockpile.packaged_food = (n.stockpile.packaged_food || 0) + potential;
+          n.chainOutputDaily.packaged_food = Math.round(potential * 3);
+        } else {
+          n.chainOutputDaily.packaged_food = 0;
+        }
+      }
+
+      // Chain 3: Refined Fuel & Energy (Oil + Minerals -> Fuel Energy) in Refineries
+      const fuelRef = chains.fuel_energy;
+      if (fuelRef && refineryCount > 0) {
+        const potential = refineryCount * fuelRef.baseYield * 0.32;
+        const reqOil = potential * fuelRef.inputs.oil;
+        const reqMin = potential * fuelRef.inputs.minerals;
+        if ((n.stockpile.oil || 0) >= reqOil && (n.stockpile.minerals || 0) >= reqMin) {
+          n.stockpile.oil -= reqOil;
+          n.stockpile.minerals -= reqMin;
+          n.stockpile.fuel_energy = (n.stockpile.fuel_energy || 0) + potential;
+          n.chainOutputDaily.fuel_energy = Math.round(potential * 3);
+        } else {
+          n.chainOutputDaily.fuel_energy = 0;
+        }
+      }
+
+      // Chain 4: Consumer Goods (Minerals + Steel + Food -> Consumer Goods) in Logistics & Trade Hubs
+      const consRef = chains.consumer_goods;
+      if (consRef && logisticsCount > 0) {
+        const potential = logisticsCount * consRef.baseYield * 0.28;
+        const reqMin = potential * consRef.inputs.minerals;
+        const reqSt = potential * consRef.inputs.steel;
+        const reqFd = potential * consRef.inputs.packaged_food;
+        if ((n.stockpile.minerals || 0) >= reqMin && (n.stockpile.steel || 0) >= reqSt && (n.stockpile.packaged_food || 0) >= reqFd) {
+          n.stockpile.minerals -= reqMin;
+          n.stockpile.steel -= reqSt;
+          n.stockpile.packaged_food -= reqFd;
+          n.stockpile.consumer_goods = (n.stockpile.consumer_goods || 0) + potential;
+          n.chainOutputDaily.consumer_goods = Math.round(potential * 3);
+          // Consumer goods boost happiness and generate local sales tax!
+          n.gold += Math.round(potential * 4.5);
+        } else {
+          n.chainOutputDaily.consumer_goods = 0;
+        }
+      }
+
+      // Chain 5: Enriched Uranium (Uranium + Fuel Energy -> Enriched Uranium) in Research Hubs
+      const nukeRef = chains.enriched_uranium;
+      const hasNukeTech = n.unlockedTechs && n.unlockedTechs.includes('nuclear_program');
+      if (nukeRef && researchCount > 0 && hasNukeTech) {
+        const potential = researchCount * nukeRef.baseYield * 0.22;
+        const reqU = potential * nukeRef.inputs.uranium;
+        const reqFuel = potential * nukeRef.inputs.fuel_energy;
+        if ((n.stockpile.uranium || 0) >= reqU && (n.stockpile.fuel_energy || 0) >= reqFuel) {
+          n.stockpile.uranium -= reqU;
+          n.stockpile.fuel_energy -= reqFuel;
+          n.stockpile.enriched_uranium = (n.stockpile.enriched_uranium || 0) + potential;
+          n.chainOutputDaily.enriched_uranium = Math.round(potential * 3);
+        } else {
+          n.chainOutputDaily.enriched_uranium = 0;
+        }
+      }
+    });
+  }
+
+  // ============================================================================
+  // 2. DYNAMIC COMMODITY MARKET & REAL-TIME PRICE ENGINE
+  // ============================================================================
+  function updateCommodityMarket() {
+    const s = S();
+    const eco = ensureEconomy();
+    if (!s || !eco) return;
+
+    eco.tick++;
+    const cfg = BE();
+    const basePrices = cfg.basePrices || {};
+
+    // 1. Calculate global supply & demand totals
+    const supply = {};
+    const demand = {};
+    ALL_MARKET_KEYS.forEach(k => {
+      supply[k] = 10;
+      demand[k] = 10;
+    });
+
+    Object.values(s.nations).forEach(n => {
+      if (!n || !n.stockpile) return;
+      const atWar = (n.atWarWith || []).length > 0;
+      const popM = (n.totalPopulation || 40000000) / 1000000;
+
+      // Supply contributors
+      ALL_MARKET_KEYS.forEach(k => {
+        supply[k] += (n.stockpile[k] || 0) * 0.05 + ((n.dailyResources && n.dailyResources[k]) || 0) * 0.4;
+      });
+
+      // Demand contributors
+      demand.grain += popM * 1.8;
+      demand.livestock += popM * 1.2;
+      demand.packaged_food += popM * 1.5;
+      demand.consumer_goods += popM * 1.4;
+      demand.iron += (n.provinceCount || 10) * 1.5;
+      demand.steel += (n.provinceCount || 10) * 2.2 + (atWar ? 35 : 0);
+      demand.oil += (n.provinceCount || 10) * 2.0 + (atWar ? 40 : 0);
+      demand.fuel_energy += (n.provinceCount || 10) * 2.5 + (atWar ? 50 : 0);
+      demand.uranium += (n.unlockedTechs && n.unlockedTechs.includes('nuclear_program') ? 25 : 5);
+      demand.minerals += (n.provinceCount || 10) * 1.8;
+    });
+
+    // 2. Adjust prices smoothly based on supply vs demand ratio
+    ALL_MARKET_KEYS.forEach(k => {
+      eco.globalSupply[k] = Math.round(supply[k]);
+      eco.globalDemand[k] = Math.round(demand[k]);
+
+      const base = basePrices[k] || 25;
+      const ratio = clamp(demand[k] / Math.max(1, supply[k]), 0.4, 2.6);
+      const targetPrice = base * ratio;
+
+      const inertia = cfg.priceInertia || 0.88;
+      const current = eco.prices[k] || base;
+      const updated = current * inertia + targetPrice * (1 - inertia);
+      const minP = base * (cfg.priceFluctuationMin || 0.35);
+      const maxP = base * (cfg.priceFluctuationMax || 2.8);
+      eco.prices[k] = Math.round(clamp(updated, minP, maxP) * 10) / 10;
+
+      // Track price history for sparkline charts
+      if (eco.tick % 2 === 0) {
+        if (!eco.priceHistory[k]) eco.priceHistory[k] = [];
+        eco.priceHistory[k].push(eco.prices[k]);
+        if (eco.priceHistory[k].length > 12) eco.priceHistory[k].shift();
+      }
+    });
+  }
+
+  // ============================================================================
+  // 3. MACROECONOMICS: INFLATION, CENTRAL BANK & PUBLIC DEBT
+  // ============================================================================
+  function updateMacroeconomics() {
+    const s = S();
+    const eco = ensureEconomy();
+    if (!s || !eco) return;
+    const cfg = BE().macro || {};
+
+    Object.values(s.nations).forEach(n => {
+      if (!n || !n.id) return;
+
+      // 1. Calculate national budget surplus / deficit
+      const netDaily = (n.goldNet || 0) + (n.tradeRevenue || 0) + (n.customsRevenue || 0);
+
+      // 2. Customs Tariffs yield revenue from imports/trade
+      const tariffRate = (n.customsTariff || 10) / 100;
+      const tariffRev = Math.round((n.tradeRevenue || 30) * tariffRate * (cfg.tariffYieldRate || 0.65));
+      n.customsRevenue = tariffRev;
+      n.gold += Math.round(tariffRev * 0.35);
+
+      // 3. Public Debt Interest Servicing
+      if (n.nationalDebt > 0) {
+        const annualRate = (n.interestRate || 5.0) / 100;
+        const tickInterest = Math.max(1, Math.round((n.nationalDebt * annualRate) / 240));
+        n.gold = Math.max(0, n.gold - tickInterest);
+      }
+
+      // 4. Inflation Dynamics
+      // Deficit pushes inflation up; surplus cools it down
+      const deficitPressure = netDaily < 0 ? Math.abs(netDaily) * (cfg.moneySupplyImpact || 0.00006) : -0.04;
+      const tariffPressure = tariffRate * (cfg.tariffInflationWeight || 0.045);
+      const rateCooling = ((n.interestRate || 5.0) - 5.0) * 0.02; // high interest cools inflation
+
+      const deltaInf = deficitPressure + tariffPressure - rateCooling;
+      n.inflationRate = clamp(Math.round(((n.inflationRate || 2.8) + deltaInf) * 100) / 100, 0.5, 38.0);
+
+      // High inflation increases maintenance costs and reduces happiness
+      if (n.inflationRate > 8.0) {
+        const infPenalty = (n.inflationRate - 8.0) * 0.4;
+        n.gold = Math.max(0, n.gold - Math.round(infPenalty * 2));
+      }
+
+      // 5. Sovereign Bond Rating update
+      const gdpEst = Math.max(1000, (n.gold || 500) + (n.tradeRevenue || 50) * 15 + (n.provinceCount || 5) * 400);
+      const debtRatio = (n.nationalDebt || 0) / gdpEst;
+      if (debtRatio <= 0.2 && n.inflationRate < 5) n.bondRating = 'AAA';
+      else if (debtRatio <= 0.5 && n.inflationRate < 8) n.bondRating = 'AA';
+      else if (debtRatio <= 0.9 && n.inflationRate < 12) n.bondRating = 'A';
+      else if (debtRatio <= 1.5) n.bondRating = 'BBB';
+      else if (debtRatio <= 2.2) n.bondRating = 'BB';
+      else n.bondRating = 'C';
+    });
+  }
+
+  // ============================================================================
+  // PUBLIC ACTIONS & API
+  // ============================================================================
+  function borrowDebt(amount, nationId) {
+    nationId = resolve(nationId);
+    const n = nat(nationId);
+    if (!n) return { ok: false, reason: 'Devlet bulunamadı.' };
+
+    const unit = amount || BE().macro.debtUnit || 500;
+    const maxDebt = (n.gold || 1000) * 5 + (n.provinceCount || 5) * 1500;
+    if ((n.nationalDebt || 0) + unit > maxDebt) {
+      return { ok: false, reason: 'Kredi limiti aşıldı! Dünya Bankası tahvil ihracını reddetti.' };
+    }
+
+    n.nationalDebt = (n.nationalDebt || 0) + unit;
+    n.gold += unit;
+    n.inflationRate = clamp(n.inflationRate + 0.35, 0.5, 40);
+    toast(`🏛️ Hazineye ${unit} ₺ devlet tahvili borcu alındı. Mevcut borç: ${n.nationalDebt} ₺`, 'warning');
+    refresh();
+    return { ok: true, debt: n.nationalDebt };
+  }
+
+  function repayDebt(amount, nationId) {
+    nationId = resolve(nationId);
+    const n = nat(nationId);
+    if (!n) return { ok: false, reason: 'Devlet bulunamadı.' };
+    if ((n.nationalDebt || 0) <= 0) return { ok: false, reason: 'Ödenecek kamu borcunuz bulunmuyor.' };
+
+    const payAmt = Math.min(amount || 500, n.nationalDebt, n.gold);
+    if (payAmt <= 0) return { ok: false, reason: 'Hazine bakiyesi yetersiz.' };
+
+    n.gold -= payAmt;
+    n.nationalDebt -= payAmt;
+    n.inflationRate = clamp(n.inflationRate - 0.25, 0.5, 40);
+    toast(`✅ ${payAmt} ₺ kamu borcu kapatıldı. Kalan borç: ${n.nationalDebt} ₺`, 'success');
+    refresh();
+    return { ok: true, remaining: n.nationalDebt };
+  }
+
+  function setInterestRate(rate, nationId) {
+    nationId = resolve(nationId);
+    const n = nat(nationId);
+    if (!n) return;
+    n.interestRate = clamp(rate, 1, 25);
+    refresh();
+  }
+
+  function setCustomsTariff(rate, nationId) {
+    nationId = resolve(nationId);
+    const n = nat(nationId);
+    if (!n) return;
+    n.customsTariff = clamp(rate, 0, 50);
+    refresh();
+  }
+
+  function tradeCommodity(goodId, action, amount, nationId) {
+    nationId = resolve(nationId);
+    const n = nat(nationId);
+    const eco = ensureEconomy();
+    if (!n || !eco) return { ok: false, reason: 'Hata.' };
+
+    const unitPrice = eco.prices[goodId] || (BE().basePrices[goodId] || 20);
+    const qty = amount || 50;
+    const totalCost = Math.round(qty * unitPrice * 1.08); // +8% brokerage/logistics
+    const totalRevenue = Math.round(qty * unitPrice * 0.95); // -5% exchange commission
+
+    const isPlayer = nationId === (S() && S().playerNationId ? S().playerNationId : 'turkiye');
+
+    if (action === 'buy') {
+      if (n.gold < totalCost) {
+        if (isPlayer) toast(`Yetersiz hazine rezervi! (${totalCost} ₺ gerekli)`, 'warning');
+        return { ok: false, reason: 'Yetersiz hazine.' };
+      }
+      n.gold -= totalCost;
+      n.stockpile[goodId] = (n.stockpile[goodId] || 0) + qty;
+      eco.globalDemand[goodId] = (eco.globalDemand[goodId] || 100) + qty * 0.5;
+      if (isPlayer) toast(`📥 ${qty} birim ${GOOD_INFO[goodId] ? GOOD_INFO[goodId].name : goodId} ithal edildi (-${totalCost} ₺)`, 'info');
+    } else {
+      // sell
+      if ((n.stockpile[goodId] || 0) < qty) {
+        if (isPlayer) toast(`Yetersiz stok! (Mevcut: ${Math.floor(n.stockpile[goodId] || 0)})`, 'warning');
+        return { ok: false, reason: 'Yetersiz stok.' };
+      }
+      n.stockpile[goodId] -= qty;
+      n.gold += totalRevenue;
+      eco.globalSupply[goodId] = (eco.globalSupply[goodId] || 100) + qty * 0.5;
+      if (isPlayer) toast(`📤 ${qty} birim ${GOOD_INFO[goodId] ? GOOD_INFO[goodId].name : goodId} dünya borsasında satıldı (+${totalRevenue} ₺)`, 'success');
+    }
+    if (isPlayer) refresh();
+    return { ok: true };
+  }
+
+  // ============================================================================
+  // HOOK INTO SIMULATION TICK
+  // ============================================================================
+  const origSimTick = SoH.Simulation.tick;
+  SoH.Simulation.tick = function () {
+    ensureEconomy();
+    try {
+      runProductionChains();
+      updateCommodityMarket();
+      updateMacroeconomics();
+    } catch (err) {
+      if (window.console) console.error('Economy tick error', err);
+    }
+    return origSimTick.apply(this, arguments);
+  };
+
+  const origSimInit = SoH.Simulation.init;
+  SoH.Simulation.init = function () {
+    const res = origSimInit.apply(this, arguments);
+    ensureEconomy();
+    return res;
+  };
+  ensureEconomy();
+
+  SoH.Economy = {
+    ensure: ensureEconomy,
+    ALL_MARKET_KEYS: ALL_MARKET_KEYS,
+    PROCESSED_KEYS: PROCESSED_KEYS,
+    GOOD_INFO: GOOD_INFO,
+    borrowDebt: borrowDebt,
+    repayDebt: repayDebt,
+    setInterestRate: setInterestRate,
+    setCustomsTariff: setCustomsTariff,
+    tradeCommodity: tradeCommodity,
+    getPrice: function (k) { return (ensureEconomy().prices[k] || (BE().basePrices[k] || 25)); },
+    getPrices: function () { return ensureEconomy().prices; }
+  };
+})();
+
+</script>
+  <script>
+// Skylines of History — Technology Tree, Internal Politics, Demographics & City Management (Phase 4)
+// Implements:
+// 1. 4-Branch Research Tree (Agriculture, Industry, Military, Energy) with Tiers 1-4 & Prerequisites
+// 2. Internal Politics: Government Forms (Democracy, Autocracy, Military Junta, Monarchy)
+// 3. National Stability, Happiness, Riots, Strikes, Coups & Organic Migration
+// 4. Random Disasters (Famine, Epidemics, Earthquakes) & Relief Actions
+// 5. Per-City Infrastructure Upgrades (Port, Factory, Granary, Barracks, Power Plant, Lab) & City Tiers
+window.SoH = window.SoH || {};
+
+(function () {
+  'use strict';
+
+  function BT() { return (SoH.BALANCE && SoH.BALANCE.techTree) || {}; }
+  function BP() { return (SoH.BALANCE && SoH.BALANCE.politics) || {}; }
+  function BC() { return (SoH.BALANCE && SoH.BALANCE.cityManagement) || {}; }
+  function S() { return SoH.state; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function nat(id) { return S() && S().nations && S().nations[id]; }
+  function resolve(id) { var s = S(); return (!id || id === 'player') ? (s && s.playerNationId ? s.playerNationId : 'turkiye') : id; }
+  function toast(msg, type) { if (SoH.UI && typeof SoH.UI.showToast === 'function') SoH.UI.showToast(msg, type || 'info'); }
+  function refresh() { if (SoH.UI && typeof SoH.UI.refresh === 'function') SoH.UI.refresh(); }
+
+  // Default government archetypes per nation
+  const DEFAULT_GOVERNMENTS = {
+    turkiye: 'democracy',
+    azerbaycan: 'autocracy',
+    rusya: 'autocracy',
+    iran: 'autocracy',
+    abd: 'democracy',
+    cin: 'autocracy',
+    almanya: 'democracy',
+    ingiltere: 'monarchy',
+    fransa: 'democracy',
+    japonya: 'monarchy',
+    suudi: 'monarchy',
+    iskandinavya: 'democracy',
+    italya: 'democracy',
+    ispanya: 'monarchy',
+    polonya: 'democracy',
+    ukrayna: 'democracy',
+    orta_asya: 'autocracy',
+    hindistan: 'democracy',
+    afrika: 'democracy',
+    balkanlar: 'democracy',
+    guney_amerika: 'democracy'
+  };
+
+  function ensureTechPolitics() {
+    const s = S();
+    if (!s || !s.nations) return;
+
+    if (!s.politics) {
+      s.politics = {
+        tick: 0,
+        activeDisasters: [],
+        disasterHistory: []
+      };
+    }
+
+    Object.keys(s.nations).forEach(nId => {
+      const n = s.nations[nId];
+      if (!n) return;
+      if (!n.government) {
+        n.government = DEFAULT_GOVERNMENTS[nId] || 'democracy';
+      }
+      if (typeof n.stability !== 'number') n.stability = 78;
+      if (typeof n.happiness !== 'number') n.happiness = 75;
+      if (!n.unlockedTechs) n.unlockedTechs = ['deep_drilling', 'modern_livestock', 'siha_doctrine', 'global_trade_fleet'];
+      if (n.activeResearch === undefined) n.activeResearch = null;
+      if (typeof n.researchProgress !== 'number') n.researchProgress = 0;
+    });
+
+    if (s.provinces) {
+      Object.keys(s.provinces).forEach(pId => {
+        const p = s.provinces[pId];
+        if (!p) return;
+        if (!p.infrastructure) {
+          p.infrastructure = {
+            tier: getCityTier(p.population || 2000000).name,
+            level: 1,
+            upkeep: 25,
+            healthIndex: 85,
+            educationIndex: 80
+          };
+        }
+      });
+    }
+  }
+
+  function getCityTier(pop) {
+    const tiers = (BC().tiers) || [
+      { minPop: 0, name: 'Sınır Şehri', icon: '🏘️', maxInvestLevel: 3 },
+      { minPop: 3000000, name: 'Büyükşehir', icon: '🏙️', maxInvestLevel: 5 },
+      { minPop: 7000000, name: 'Metropol', icon: '🌆', maxInvestLevel: 7 },
+      { minPop: 15000000, name: 'Küresel Megakent', icon: '🌐', maxInvestLevel: 10 }
+    ];
+    let matched = tiers[0];
+    for (let i = 0; i < tiers.length; i++) {
+      if (pop >= tiers[i].minPop) matched = tiers[i];
+    }
+    return matched;
+  }
+
+  // ============================================================================
+  // 1. TECHNOLOGY RESEARCH ENGINE
+  // ============================================================================
+  function startResearch(techId, nationId) {
+    nationId = resolve(nationId);
+    const n = nat(nationId);
+    if (!n) return { ok: false, reason: 'Ülke bulunamadı.' };
+
+    const allTechs = (BT().techs) || [];
+    const tech = allTechs.find(t => t.id === techId);
+    if (!tech) return { ok: false, reason: 'Teknoloji bulunamadı.' };
+
+    if (n.unlockedTechs.includes(techId)) {
+      return { ok: false, reason: 'Bu teknoloji zaten araştırılmış.' };
+    }
+
+    if (tech.prereq && !n.unlockedTechs.includes(tech.prereq)) {
+      const pre = allTechs.find(t => t.id === tech.prereq);
+      const preName = pre ? pre.name : tech.prereq;
+      return { ok: false, reason: `Önce "${preName}" teknolojisi tamamlanmalıdır.` };
+    }
+
+    n.activeResearch = techId;
+    n.researchProgress = 0;
+    if (nationId === S().playerNationId) {
+      toast(`🔬 "${tech.name}" araştırması laboratuvarlarda başlatıldı.`, 'info');
+    }
+    refresh();
+    return { ok: true, tech: tech };
+  }
+
+  function updateResearchProgress() {
+    const s = S();
+    if (!s || !s.nations) return;
+    const allTechs = (BT().techs) || [];
+
+    Object.keys(s.nations).forEach(nId => {
+      const n = s.nations[nId];
+      if (!n || !n.activeResearch) return;
+
+      const tech = allTechs.find(t => t.id === n.activeResearch);
+      if (!tech) { n.activeResearch = null; return; }
+
+      const dailyScience = Math.max(2, Math.round((n.researchNet || 5) * 0.45));
+      n.researchProgress = (n.researchProgress || 0) + dailyScience;
+
+      if (n.researchProgress >= tech.cost) {
+        // Research Completed!
+        n.unlockedTechs.push(tech.id);
+        n.activeResearch = null;
+        n.researchProgress = 0;
+
+        if (SoH.Simulation && typeof SoH.Simulation.addLog === 'function') {
+          SoH.Simulation.addLog(`🎓 ${n.flag || '🏳️'} ${n.name}: "${tech.name}" teknolojisini tamamladı!`, 'info');
+        }
+
+        if (nId === s.playerNationId) {
+          toast(`🎉 TEBRİKLER! "${tech.name}" araştırması başarıyla tamamlandı!`, 'success');
+        }
+      }
+    });
+  }
+
+  // ============================================================================
+  // 2. INTERNAL POLITICS & POPULATION HAPPINESS / STABILITY
+  // ============================================================================
+  function setGovernment(govId, nationId) {
+    nationId = resolve(nationId);
+    const n = nat(nationId);
+    if (!n) return { ok: false, reason: 'Ülke bulunamadı.' };
+
+    const govs = (BP().governments) || {};
+    const targetGov = govs[govId];
+    if (!targetGov) return { ok: false, reason: 'Geçersiz hükümet türü.' };
+
+    if (n.gold < 300) {
+      toast('Hükümet reformu için en az 300 ₺ anayasa fonu gerekli!', 'warning');
+      return { ok: false, reason: 'Yetersiz altın.' };
+    }
+
+    n.gold -= 300;
+    n.government = govId;
+    n.stability = clamp(n.stability - 15, 20, 100); // Transition unrest
+    toast(`🏛️ Hükümet türü "${targetGov.name}" olarak değiştirildi!`, 'success');
+    if (SoH.Simulation && typeof SoH.Simulation.addLog === 'function') {
+      SoH.Simulation.addLog(`🏛️ ${n.flag || '🏳️'} ${n.name} anayasa reformu yaparak "${targetGov.name}" rejimine geçti.`, 'info');
+    }
+    refresh();
+    return { ok: true, government: targetGov };
+  }
+
+  function updatePoliticsAndDemographics() {
+    const s = S();
+    if (!s || !s.nations || !s.provinces) return;
+    const govs = (BP().governments) || {};
+
+    Object.keys(s.nations).forEach(nId => {
+      const n = s.nations[nId];
+      if (!n) return;
+
+      const gCfg = govs[n.government] || govs.democracy || {};
+      const nutrition = n.nutritionLevel || 100;
+      const fatigue = n.warFatigue || 0;
+      const inflation = (s.economy && s.economy.inflationRate) || 2.5;
+
+      // 1. Happiness (Mutluluk) Formula
+      let targetHappiness = 70 + (gCfg.happinessBonus || 0);
+      if (nutrition >= 100) targetHappiness += 10;
+      else targetHappiness -= (100 - nutrition) * 0.4;
+      if (inflation > 8) targetHappiness -= (inflation - 8) * 1.5;
+      if (fatigue > 30) targetHappiness -= (fatigue - 30) * 0.5;
+
+      n.happiness = clamp(Math.round((n.happiness || 75) * 0.92 + targetHappiness * 0.08), 10, 100);
+
+      // 2. Stability (İstikrar) Formula
+      let targetStability = (gCfg.stabilityBase || 75);
+      if (n.happiness < 40) targetStability -= (40 - n.happiness) * 0.7;
+      if (fatigue > 50) targetStability -= (fatigue - 50) * 0.6;
+      if (n.gold < 100) targetStability -= 12;
+
+      n.stability = clamp(Math.round((n.stability || 78) * 0.94 + targetStability * 0.06), 5, 100);
+
+      // 3. Riots & Strikes (İsyan ve Grevler)
+      if (n.stability < (BP().stability?.riotThreshold || 35)) {
+        if (Math.random() < 0.15) {
+          const ownedProvs = Object.values(s.provinces).filter(p => p.owner === nId);
+          if (ownedProvs.length > 0) {
+            const riotProv = ownedProvs[Math.floor(Math.random() * ownedProvs.length)];
+            const city = riotProv.cityName || riotProv.name;
+            const logMsg = `🔥 İSYAN & GREV: ${n.flag || ''} ${city} şehrinde düşük refah ve istikrarsızlık nedeniyle halk sokaklara döküldü!`;
+            if (SoH.Simulation && typeof SoH.Simulation.addLog === 'function') {
+              SoH.Simulation.addLog(logMsg, 'war');
+            }
+            if (nId === s.playerNationId) toast(logMsg, 'warning');
+            n.gold = Math.max(0, n.gold - 80);
+          }
+        }
+      }
+
+      // 4. Military Coup Risk (Askeri Darbe)
+      if (n.stability < (BP().stability?.coupThreshold || 20) && ['autocracy', 'junta'].includes(n.government)) {
+        if (Math.random() < 0.08) {
+          const logMsg = `⚡ ASKERİ DARBE GİRİŞİMİ: ${n.flag || ''} ${n.name} başkentinde ordu ve muhalifler yönetime el koymaya çalıştı!`;
+          if (SoH.Simulation && typeof SoH.Simulation.addLog === 'function') {
+            SoH.Simulation.addLog(logMsg, 'war');
+          }
+          if (nId === s.playerNationId) toast(logMsg, 'warning');
+          n.stability = 45; // Emergency normalization
+        }
+      }
+    });
+
+    // 5. Inter-City Organic Migration
+    if (s.tickCount % 5 === 0) {
+      const allProvs = Object.values(s.provinces);
+      allProvs.forEach(p => {
+        const n = s.nations[p.owner];
+        if (!n) return;
+        const happiness = n.happiness || 70;
+        const netMigration = Math.round((p.population || 2000000) * ((happiness - 70) / 10000));
+        p.population = clamp((p.population || 2000000) + netMigration, 300000, 45000000);
+        if (p.infrastructure) {
+          p.infrastructure.tier = getCityTier(p.population).name;
+        }
+      });
+    }
+  }
+
+  // ============================================================================
+  // 3. RANDOM DISASTERS & CRISES
+  // ============================================================================
+  function triggerRandomDisaster() {
+    const s = S();
+    if (!s || !s.provinces || !s.nations) return;
+    if (Math.random() > 0.12) return; // Disasters happen occasionally
+
+    const provIds = Object.keys(s.provinces);
+    const targetProvId = provIds[Math.floor(Math.random() * provIds.length)];
+    const prov = s.provinces[targetProvId];
+    if (!prov) return;
+    const n = s.nations[prov.owner];
+    if (!n) return;
+
+    const disasterKeys = ['famine', 'epidemic', 'earthquake'];
+    const chosenType = disasterKeys[Math.floor(Math.random() * disasterKeys.length)];
+    const dTypes = BP().disasters?.types || {};
+    const dInfo = dTypes[chosenType] || { name: 'Doğal Afet', icon: '⚠️' };
+    const city = prov.cityName || prov.name;
+
+    let desc = '';
+    if (chosenType === 'famine') {
+      n.food = Math.max(0, (n.food || 100) * 0.7);
+      n.stability = clamp(n.stability - 10, 10, 100);
+      desc = `${dInfo.icon} KURAKLIK & KITLIK: ${city} tarım havzasında hasat çöktü! Ulusal gıda stokları zarar gördü.`;
+    } else if (chosenType === 'epidemic') {
+      prov.population = Math.round((prov.population || 2000000) * 0.97);
+      n.happiness = clamp(n.happiness - 12, 10, 100);
+      desc = `${dInfo.icon} BULAŞICI SALGIN: ${city} metropolünde acil sağlık durumu ilan edildi!`;
+    } else {
+      prov.garrison = Math.max(20, (prov.garrison || 100) - 25);
+      n.gold = Math.max(0, n.gold - 150);
+      desc = `${dInfo.icon} BÜYÜK DEPREM: ${city} bölgesinde 7.2 büyüklüğünde deprem meydana geldi! Altyapı hasarı oluştu.`;
+    }
+
+    if (SoH.Simulation && typeof SoH.Simulation.addLog === 'function') {
+      SoH.Simulation.addLog(desc, 'info');
+    }
+    if (prov.owner === s.playerNationId) {
+      toast(desc, 'warning');
+    }
+  }
+
+  // ============================================================================
+  // 4. PER-CITY INFRASTRUCTURE UPGRADE
+  // ============================================================================
+  function upgradeCityInfrastructure(provId, nationId) {
+    nationId = resolve(nationId);
+    const s = S();
+    const p = s && s.provinces && s.provinces[provId];
+    const n = nat(nationId);
+    if (!p || !n) return { ok: false, reason: 'Şehir bulunamadı.' };
+
+    p.infrastructure = p.infrastructure || { level: 1, upkeep: 25, tier: getCityTier(p.population || 2000000).name };
+    const tier = getCityTier(p.population || 2000000);
+    const curLevel = p.infrastructure.level || 1;
+
+    if (curLevel >= tier.maxInvestLevel) {
+      toast(`${tier.name} seviyesinde altyapı maksimum düzeye (${curLevel}) ulaştı. Nüfus büyümesi gerekli!`, 'warning');
+      return { ok: false, reason: 'Maksimum altyapı seviyesi.' };
+    }
+
+    const cost = Math.round(180 * Math.pow(1.4, curLevel));
+    if (n.gold < cost) {
+      toast(`Altyapı yatırımı için ${cost} ₺ hazine bütçesi gerekli!`, 'warning');
+      return { ok: false, reason: 'Yetersiz altın.' };
+    }
+
+    n.gold -= cost;
+    p.infrastructure.level = curLevel + 1;
+    p.infrastructure.upkeep += 8;
+    p.population = Math.round((p.population || 2000000) * 1.05);
+
+    const city = p.cityName || p.name;
+    toast(`🏗️ ${city} Şehir Altyapısı Seviye ${p.infrastructure.level}'e yükseltildi! (-${cost} ₺)`, 'success');
+    refresh();
+    return { ok: true, level: p.infrastructure.level };
+  }
+
+  // ============================================================================
+  // HOOK INTO SIMULATION TICK & INIT
+  // ============================================================================
+  const origSimTick = SoH.Simulation.tick;
+  SoH.Simulation.tick = function () {
+    ensureTechPolitics();
+    try {
+      updateResearchProgress();
+      if (S() && S().tickCount % 2 === 0) {
+        updatePoliticsAndDemographics();
+      }
+      if (S() && S().tickCount % 30 === 0) {
+        triggerRandomDisaster();
+      }
+    } catch (err) {
+      if (window.console) console.error('TechPolitics tick error', err);
+    }
+    return origSimTick.apply(this, arguments);
+  };
+
+  const origSimInit = SoH.Simulation.init;
+  SoH.Simulation.init = function () {
+    const res = origSimInit.apply(this, arguments);
+    ensureTechPolitics();
+    return res;
+  };
+  ensureTechPolitics();
+
+  SoH.TechPolitics = {
+    ensure: ensureTechPolitics,
+    startResearch: startResearch,
+    setGovernment: setGovernment,
+    upgradeCityInfrastructure: upgradeCityInfrastructure,
+    getCityTier: getCityTier
+  };
+})();
+
+</script>
+  <script>
+// Skylines of History — Game Flow, Save/Load, Victory Conditions & Achievements (Phase 5)
+// Implements:
+// 1. Victory & Defeat Condition Engine (World Domination, Economic Hegemony, Scientific Triumph)
+// 2. LocalStorage Robust Save/Load & Periodic Auto-Save
+// 3. National Achievements (Başarımlar) Tracker
+// 4. New Game Nation & Difficulty Setup Dialog
+// 5. Comparison Leaderboards (Top Economies, Armies, Populations, Science)
+window.SoH = window.SoH || {};
+
+(function () {
+  'use strict';
+
+  function BF() { return (SoH.BALANCE && SoH.BALANCE.flow) || {}; }
+  function S() { return SoH.state; }
+  function toast(msg, type) { if (SoH.UI && typeof SoH.UI.showToast === 'function') SoH.UI.showToast(msg, type || 'info'); }
+  function refresh() { if (SoH.UI && typeof SoH.UI.refresh === 'function') SoH.UI.refresh(); }
+
+  const STORAGE_KEY_PREFIX = 'skylines_of_history_save_';
+
+  function ensureGameFlow() {
+    const s = S();
+    if (!s) return;
+    if (!s.achievements) s.achievements = [];
+    if (!s.difficulty) s.difficulty = 'normal';
+    if (s.gameEnded === undefined) s.gameEnded = false;
+    if (typeof s.lastAutosaveDay !== 'number') s.lastAutosaveDay = 0;
+  }
+
+  // ============================================================================
+  // 1. VICTORY & DEFEAT CHECKER
+  // ============================================================================
+  function checkVictoryConditions() {
+    const s = S();
+    if (!s || s.gameEnded || !s.nations || !s.provinces) return;
+
+    const playerNationId = s.playerNationId || 'turkiye';
+    const playerNation = s.nations[playerNationId];
+    if (!playerNation) return;
+
+    const allProvinces = Object.values(s.provinces);
+    const totalWorldCities = allProvinces.length || 83;
+    const playerCities = allProvinces.filter(p => p.owner === playerNationId);
+
+    // Defeat Check: Lost all provinces
+    if (playerCities.length === 0) {
+      s.gameEnded = true;
+      showEndGameModal('defeat', 'Tüm Topraklar Kaybedildi!', 'Ulusunuzun tüm şehirleri düşman orduları tarafından ele geçirildi.');
+      return;
+    }
+
+    const V = BF().victory || {};
+
+    // 1. Domination Victory (Dünya Hakimiyeti: >= 50% of world cities)
+    const dominationReq = (V.domination && V.domination.requiredShare) || 0.50;
+    if (playerCities.length / totalWorldCities >= dominationReq) {
+      s.gameEnded = true;
+      unlockAchievement('global_superpower');
+      showEndGameModal('victory', 'DÜNYA HAKİMİYETİ ZAFERİ!', `${playerNation.name}, dünyadaki ${playerCities.length}/${totalWorldCities} şehri fethederek küresel tek süper güç haline geldi!`);
+      return;
+    }
+
+    // 2. Economic Victory (Küresel Finans: Treasury >= 25,000 and strong commodities)
+    const econReq = (V.economic && V.economic.treasury) || 25000;
+    if ((playerNation.gold || 0) >= econReq) {
+      s.gameEnded = true;
+      unlockAchievement('debt_free');
+      showEndGameModal('victory', 'KÜRESEL EKONOMİ ZAFERİ!', `${playerNation.name}, ${Math.floor(playerNation.gold).toLocaleString()} ₺ hazine rezervi ile dünya finans piyasalarını tamamen kontrolü altına aldı!`);
+      return;
+    }
+
+    // 3. Scientific Victory (Teknolojik Üstünlük: All Tier-4 techs unlocked)
+    const unlocked = playerNation.unlockedTechs || [];
+    const tier4Techs = ['ai_smart_factories', 'hypersonic_missiles', 'fusion_reactor'];
+    const hasAllTier4 = tier4Techs.every(id => unlocked.includes(id));
+    if (hasAllTier4) {
+      s.gameEnded = true;
+      showEndGameModal('victory', 'BİLİMSEL ÜSTÜNLÜK ZAFERİ!', `${playerNation.name}, füzyon enerjisi, yapay zeka fabrikaları ve hipersonik savunma doktrini ile insanlığı yeni bir altın çağa taşıdı!`);
+      return;
+    }
+  }
+
+  function showEndGameModal(type, title, desc) {
+    const isVic = type === 'victory';
+    const soundIcon = isVic ? '🏆' : '💀';
+    const bgGrad = isVic
+      ? 'linear-gradient(135deg, rgba(16,185,129,0.95), rgba(15,23,42,0.98))'
+      : 'linear-gradient(135deg, rgba(239,68,68,0.95), rgba(15,23,42,0.98))';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'soh-endgame-modal';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);backdrop-filter:blur(16px);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.4s ease;';
+
+    overlay.innerHTML = `
+      <div style="background:${bgGrad};border:2px solid ${isVic ? '#10b981' : '#ef4444'};border-radius:24px;padding:36px;max-width:540px;text-align:center;color:#fff;box-shadow:0 25px 60px rgba(0,0,0,0.8);">
+        <div style="font-size:64px;margin-bottom:16px;">${soundIcon}</div>
+        <h2 style="font-size:26px;font-weight:900;letter-spacing:1px;margin-bottom:12px;">${title}</h2>
+        <p style="font-size:14.5px;color:rgba(255,255,255,0.85);line-height:1.6;margin-bottom:28px;">${desc}</p>
+        <div style="display:flex;gap:14px;justify-content:center;">
+          <button onclick="document.getElementById('soh-endgame-modal').remove()" style="padding:12px 24px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:12px;cursor:pointer;font-weight:bold;font-size:13px;">Oynamaya Devam Et</button>
+          <button onclick="location.reload()" style="padding:12px 24px;background:#38bdf8;border:none;color:#0f172a;border-radius:12px;cursor:pointer;font-weight:900;font-size:13px;">Yeniden Başlat</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  }
+
+  // ============================================================================
+  // 2. ACHIEVEMENTS SYSTEM
+  // ============================================================================
+  function unlockAchievement(achId) {
+    const s = S();
+    if (!s) return;
+    s.achievements = s.achievements || [];
+    if (s.achievements.includes(achId)) return;
+
+    const allAchs = BF().achievements || [];
+    const ach = allAchs.find(a => a.id === achId);
+    if (!ach) return;
+
+    s.achievements.push(achId);
+    toast(`🏅 BAŞARIM AÇILDI: ${ach.icon} ${ach.name} — ${ach.desc}`, 'success');
+    if (SoH.Simulation && typeof SoH.Simulation.addLog === 'function') {
+      SoH.Simulation.addLog(`🏅 Başarım Kilidi Açıldı: ${ach.icon} ${ach.name}`, 'info');
+    }
+  }
+
+  function checkAchievements() {
+    const s = S();
+    if (!s || !s.nations || !s.provinces) return;
+    const playerNationId = s.playerNationId || 'turkiye';
+    const pNation = s.nations[playerNationId];
+    if (!pNation) return;
+
+    const ownedProvs = Object.values(s.provinces).filter(p => p.owner === playerNationId);
+    const stock = pNation.stockpile || {};
+
+    if (ownedProvs.length > 12) unlockAchievement('first_conquest');
+    if ((stock.steel || 0) >= 250) unlockAchievement('steel_baron');
+    if ((stock.enriched_uranium || 0) >= 1) unlockAchievement('atomic_age');
+    if (Array.isArray(pNation.allies) && pNation.allies.length >= 3) unlockAchievement('grand_coalition');
+    if ((pNation.debtStock || 0) === 0 && (pNation.gold || 0) >= 3000) unlockAchievement('debt_free');
+  }
+
+  // ============================================================================
+  // 3. ROBUST SAVE / LOAD & AUTO-SAVE
+  // ============================================================================
+  function saveGame(slotKey) {
+    const s = S();
+    if (!s) return { ok: false, reason: 'Oyun durumu bulunamadı.' };
+    slotKey = slotKey || 'manual';
+
+    try {
+      const saveData = {
+        timestamp: Date.now(),
+        dateString: s.dateString || `${s.day}.${s.month}.${s.year}`,
+        playerNationId: s.playerNationId,
+        difficulty: s.difficulty || 'normal',
+        state: s
+      };
+      localStorage.setItem(STORAGE_KEY_PREFIX + slotKey, JSON.stringify(saveData));
+      toast(`💾 Oyun başarıyla kaydedildi! (Slot: ${slotKey})`, 'success');
+      return { ok: true };
+    } catch (err) {
+      toast('Kayıt başarısız: Tarayıcı depolama kotası dolu olabilir.', 'warning');
+      return { ok: false, reason: err.message };
+    }
+  }
+
+  function loadGame(slotKey) {
+    slotKey = slotKey || 'manual';
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_PREFIX + slotKey);
+      if (!raw) {
+        toast(`Kayıtlı oyun bulunamadı (${slotKey}).`, 'warning');
+        return { ok: false, reason: 'Kayıt bulunamadı.' };
+      }
+      const data = JSON.parse(raw);
+      if (data && data.state) {
+        SoH.state = data.state;
+        toast(`📂 Oyun başarıyla yüklendi! (${data.dateString || 'Canlı'})`, 'success');
+        refresh();
+        if (SoH.Renderer && typeof SoH.Renderer.render === 'function') {
+          SoH.Renderer.render();
+        }
+        return { ok: true, data: data };
+      }
+    } catch (err) {
+      toast('Yükleme hatası: Kayıt dosyası bozuk olabilir.', 'warning');
+      return { ok: false, reason: err.message };
+    }
+  }
+
+  function autoSaveCheck() {
+    const s = S();
+    if (!s) return;
+    const interval = (BF().autosaveIntervalDays) || 30;
+    if (s.tickCount - (s.lastAutosaveDay || 0) >= interval) {
+      s.lastAutosaveDay = s.tickCount;
+      saveGame('autosave');
+    }
+  }
+
+  // ============================================================================
+  // 4. LEADERBOARDS & NATION COMPARISON
+  // ============================================================================
+  function getLeaderboards() {
+    const s = S();
+    if (!s || !s.nations || !s.provinces) return null;
+
+    const list = Object.keys(s.nations).map(nId => {
+      const n = s.nations[nId];
+      const provs = Object.values(s.provinces).filter(p => p.owner === nId);
+      const totalPop = provs.reduce((acc, p) => acc + (p.population || 0), 0);
+      const totalArmy = provs.reduce((acc, p) => acc + (p.garrison || 0), 0);
+      const totalTreasury = n.gold || 0;
+      const techCount = (n.unlockedTechs && n.unlockedTechs.length) || 0;
+
+      return {
+        id: nId,
+        name: n.name,
+        flag: n.flag,
+        provincesCount: provs.length,
+        population: totalPop,
+        army: totalArmy,
+        treasury: Math.floor(totalTreasury),
+        techs: techCount,
+        isPlayer: nId === s.playerNationId
+      };
+    });
+
+    return {
+      byArmy: list.slice().sort((a, b) => b.army - a.army),
+      byEconomy: list.slice().sort((a, b) => b.treasury - a.treasury),
+      byPopulation: list.slice().sort((a, b) => b.population - a.population),
+      byTech: list.slice().sort((a, b) => b.techs - a.techs)
+    };
+  }
+
+  // ============================================================================
+  // HOOK INTO SIMULATION TICK & INIT
+  // ============================================================================
+  const origSimTick = SoH.Simulation.tick;
+  SoH.Simulation.tick = function () {
+    ensureGameFlow();
+    try {
+      if (S() && S().tickCount % 4 === 0) {
+        checkVictoryConditions();
+        checkAchievements();
+      }
+      autoSaveCheck();
+    } catch (err) {
+      if (window.console) console.error('GameFlow tick error', err);
+    }
+    return origSimTick.apply(this, arguments);
+  };
+
+  const origSimInit = SoH.Simulation.init;
+  SoH.Simulation.init = function () {
+    const res = origSimInit.apply(this, arguments);
+    ensureGameFlow();
+    return res;
+  };
+  ensureGameFlow();
+
+  SoH.GameFlow = {
+    ensure: ensureGameFlow,
+    saveGame: saveGame,
+    loadGame: loadGame,
+    checkVictoryConditions: checkVictoryConditions,
+    unlockAchievement: unlockAchievement,
+    getLeaderboards: getLeaderboards,
+    showEndGameModal: showEndGameModal
+  };
+})();
+
+</script>
+  <script>
 // Skylines of History v4.0-GEOPOLITICAL — Multi-Agent Utility AI Decision Systems
 // Supports 22 Modern Nations, 83 Real-World Cities, 8 Underground/Agricultural/Livestock Resources & 8 Province Investments
 // Ajan 1: Otomatik Şehir, Maden & Tarım/Hayvancılık Bakanı (AI Resource & Investment Governor)
@@ -7854,6 +10530,137 @@ SoH.AI = {
     }
   },
 
+  // ============================================================================
+  // AJAN 3: DÜNYA LİDERLERİ YAPAY ZEKASI (21 ÜLKE JEOPOLİTİK, TİCARET & SAVAŞ AI)
+  // Desteklenen Kişilikler: Militarist, Ticari/Sanayi, Diplomat, Küresel Hegemon, Tarafsız
+  // Desteklenen Zorluklar: Kolay, Normal, Zor, Demir Adam
+  // ============================================================================
+
+  _getAIPersonality(nationId) {
+    const BAI = SoH.BALANCE && SoH.BALANCE.ai;
+    const pKey = (BAI && BAI.archetypes && BAI.archetypes[nationId]) || 'militarist';
+    const pCfg = (BAI && BAI.personalities && BAI.personalities[pKey]) || {
+      id: pKey,
+      name: 'Militarist Genişlemeci',
+      icon: '⚔️',
+      aggressionBonus: 0.20,
+      tariffTarget: 25,
+      peaceThresholdFatigue: 75,
+      espionageFocus: ['sabotage', 'incite'],
+      tradeSurplusThreshold: 200,
+      preferredUnits: ['tank', 'airforce']
+    };
+    return { key: pKey, cfg: pCfg };
+  },
+
+  _getAIDifficulty() {
+    const BAI = SoH.BALANCE && SoH.BALANCE.ai;
+    const diffKey = (SoH.state && SoH.state.difficulty) || 'normal';
+    const diffCfg = (BAI && BAI.difficulties && BAI.difficulties[diffKey]) || {
+      id: diffKey,
+      name: 'Normal',
+      aiIncomeMult: 1.0,
+      aiCombatMult: 1.0,
+      aiAggressionMult: 1.0,
+      playerCombatMult: 1.0,
+      peaceWillingnessBias: 0
+    };
+    return { key: diffKey, cfg: diffCfg };
+  },
+
+  // Küresel Hegemon / Süper Güç ve Anti-Hegemon Koalisyon Kontrolü
+  checkAntiHegemonCoalitions() {
+    const s = SoH.state;
+    if (!s || !s.nations || !s.provinces) return;
+    const allProvs = this._getAllProvinces();
+    const totalCities = allProvs.length || 83;
+    let totalArmy = 0;
+    const provCounts = {};
+    const armyCounts = {};
+
+    Object.keys(s.nations).forEach(nId => {
+      provCounts[nId] = 0;
+      armyCounts[nId] = 0;
+    });
+
+    allProvs.forEach(p => {
+      if (p.owner && provCounts[p.owner] !== undefined) {
+        provCounts[p.owner]++;
+        const g = this._getProvinceGarrison(p);
+        armyCounts[p.owner] += g;
+        totalArmy += g;
+      }
+    });
+
+    const BAI = SoH.BALANCE && SoH.BALANCE.ai;
+    const provThreshold = (BAI && BAI.coalitions && BAI.coalitions.hegemonProvShare) || 0.22;
+    const armyThreshold = (BAI && BAI.coalitions && BAI.coalitions.hegemonArmyShare) || 0.28;
+
+    let hegemonId = null;
+    let hegemonShare = 0;
+
+    Object.keys(s.nations).forEach(nId => {
+      const pShare = provCounts[nId] / totalCities;
+      const aShare = totalArmy > 0 ? (armyCounts[nId] / totalArmy) : 0;
+      if (pShare >= provThreshold || aShare >= armyThreshold) {
+        if (pShare > hegemonShare) {
+          hegemonShare = pShare;
+          hegemonId = nId;
+        }
+      }
+    });
+
+    s.diplomacy = s.diplomacy || {};
+    s.diplomacy.coalitions = s.diplomacy.coalitions || {};
+
+    if (hegemonId) {
+      const hegCfg = SoH.CONFIG.NATIONS[hegemonId] || {};
+      const hegName = hegCfg.name || hegemonId;
+      s.diplomacy.hegemon = hegemonId;
+
+      // Hegemona karşı tehdit altındaki ülkeleri koalisyona davet et
+      const members = [];
+      Object.keys(s.nations).forEach(nId => {
+        if (nId === hegemonId) return;
+        const nState = s.nations[nId];
+        if (!nState || provCounts[nId] === 0) return;
+        const rel = this._getRelation(nId, hegemonId);
+        const isAllied = Array.isArray(nState.allies) && nState.allies.includes(hegemonId);
+        if (!isAllied && rel < 65) {
+          members.push(nId);
+        }
+      });
+
+      if (members.length >= 2) {
+        s.diplomacy.coalitions.antiHegemon = {
+          target: hegemonId,
+          members: members,
+          name: `Anti-${hegName} Savunma Koalisyonu`
+        };
+
+        // Koalisyon üyeleri birbirlerine yaklaşır
+        for (let i = 0; i < members.length; i++) {
+          for (let j = i + 1; j < members.length; j++) {
+            this._modifyRelation(members[i], members[j], 10);
+          }
+        }
+
+        if (this._tickCounter % 30 === 0) {
+          const leaderLabel = `${hegCfg.flag || '🚩'} ${hegName}`;
+          if (SoH.Simulation && typeof SoH.Simulation.addLog === 'function') {
+            SoH.Simulation.addLog(
+              `🌐 KÜRESEL DENGE: ${leaderLabel} aşırı büyüdü (%${Math.round(hegemonShare * 100)} Dünya Payı). ${members.length} ülke Anti-Hegemon Koalisyonunda birleşti!`,
+              'war'
+            );
+          }
+        }
+      }
+    } else {
+      s.diplomacy.hegemon = null;
+      delete s.diplomacy.coalitions.antiHegemon;
+    }
+  },
+
   // Tek bir yapay zeka ülkesinin yatırım, kaynak ticareti, tümen üretimi ve diplomasi/savaş hamlesini çalıştırır
   _runWorldLeaderTurn(nationId) {
     const nationCfg = SoH.CONFIG.NATIONS[nationId];
@@ -7865,11 +10672,78 @@ SoH.AI = {
     const nationState = this._getNationState(nationId);
     if (!nationState) return;
 
+    const personality = this._getAIPersonality(nationId);
+    const pCfg = personality.cfg;
+    const difficulty = this._getAIDifficulty();
+    const diffCfg = difficulty.cfg;
+
     const leaderLabel = `${nationCfg.flag || '🏳️'} ${nationCfg.leader} (${nationCfg.shortName || nationCfg.name})`;
-    const aggression = nationCfg.aggression || 0.4;
+    const aggression = Math.max(0.1, Math.min(0.95, ((nationCfg.aggression || 0.4) + (pCfg.aggressionBonus || 0)) * diffCfg.aiAggressionMult));
 
     // ------------------------------------------------------------------------
-    // 1. ŞEHİR, MADEN, HAYVANCILIK & TARIM YATIRIMI (`upgradeInvestment`)
+    // 1. DİNAMİK EMTİA BORSASI & ÜRETİM ZİNCİRİ TİCARETİ (Phase 2 Economy Entegrasyonu)
+    // ------------------------------------------------------------------------
+    if (SoH.Economy && typeof SoH.Economy.tradeCommodity === 'function') {
+      const stock = nationState.stockpile || {};
+
+      // A) Kritik açık kontrolü (Gıda, Enerji, Çelik)
+      if (nationState.gold > 240) {
+        if ((stock.packaged_food || 0) < 30) {
+          SoH.Economy.tradeCommodity('packaged_food', 'buy', 25, nationId);
+        } else if ((stock.fuel_energy || 0) < 30) {
+          SoH.Economy.tradeCommodity('fuel_energy', 'buy', 25, nationId);
+        } else if ((stock.steel || 0) < 20 && ['militarist', 'expansionist'].includes(personality.key)) {
+          SoH.Economy.tradeCommodity('steel', 'buy', 20, nationId);
+        }
+      }
+
+      // B) Fazlalık ihracatı: Borsa fiyatı yüksekken kâr realizasyonu
+      const surplusLimit = pCfg.tradeSurplusThreshold || 180;
+      const candidateSurplus = (SoH.Economy.ALL_MARKET_KEYS || []).filter(k => (stock[k] || 0) > surplusLimit);
+      if (candidateSurplus.length > 0 && Math.random() < 0.60) {
+        const chosenGood = candidateSurplus[Math.floor(Math.random() * candidateSurplus.length)];
+        const sellQty = Math.min(40, (stock[chosenGood] || 0) - (surplusLimit * 0.85));
+        if (sellQty > 10) {
+          SoH.Economy.tradeCommodity(chosenGood, 'sell', Math.round(sellQty), nationId);
+          this.logDecision(
+            leaderLabel,
+            '🚢',
+            `Küresel Borsada ${Math.round(sellQty)} Birim İhracat (${chosenGood})`,
+            `${nationCfg.name}, ${pCfg.name} doktrini kapsamında borsa arz fazlasını nakite çevirdi.`,
+            { agentRole: `Ajan 3 • ${pCfg.name}`, nationId, utilityScore: 82 }
+          );
+        }
+      }
+
+      // C) Gümrük Vergisi Uyarlaması
+      if (typeof SoH.Economy.setCustomsTariff === 'function') {
+        const targetTariff = pCfg.tariffTarget || 18;
+        if (Math.abs((nationState.customsTariff || 15) - targetTariff) >= 5) {
+          SoH.Economy.setCustomsTariff(targetTariff, nationId);
+        }
+      }
+
+      // D) Borç ve Hazine Yönetimi
+      if (nationState.gold < 120 && Array.isArray(nationState.atWarWith) && nationState.atWarWith.length > 0) {
+        if (typeof SoH.Economy.borrowDebt === 'function') {
+          SoH.Economy.borrowDebt(nationId);
+          this.logDecision(
+            leaderLabel,
+            '🏦',
+            'Savaş Finansmanı: 500 ₺ Hazine Bonosu İhraç Etti',
+            `Savaş durumundaki acil nakit ihtiyacını karşılamak için tahvil satışı yapıldı.`,
+            { agentRole: `Ajan 3 • ${pCfg.name}`, nationId, utilityScore: 88 }
+          );
+        }
+      } else if (nationState.gold > 1600 && (nationState.debtStock || 0) > 0) {
+        if (typeof SoH.Economy.repayDebt === 'function') {
+          SoH.Economy.repayDebt(nationId);
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 2. ŞEHİR, MADEN, HAYVANCILIK & TARIM YATIRIMI (`upgradeInvestment`)
     // ------------------------------------------------------------------------
     if (nationState.gold > 220) {
       const targetProv = provinces[Math.floor(Math.random() * provinces.length)];
@@ -7885,23 +10759,16 @@ SoH.AI = {
             nationCfg.flag || (invCfg ? invCfg.icon : '⛏️'),
             `${cityLabel}: ${bestMove.title}`,
             bestMove.reasoning,
-            { agentRole: `Ajan 3 • ${nationCfg.personality}`, nationId, utilityScore: bestMove.utilityScore }
+            { agentRole: `Ajan 3 • ${pCfg.name}`, nationId, utilityScore: bestMove.utilityScore }
           );
         }
       }
     }
 
     // ------------------------------------------------------------------------
-    // 2. KÜRESEL KAYNAK & MADEN TİCARETİ (`tradeResource`)
-    // ------------------------------------------------------------------------
-    if (Math.random() < 0.45) {
-      this._runAIResourceTrade(nationId, nationState, nationCfg, leaderLabel);
-    }
-
-    // ------------------------------------------------------------------------
     // 3. MODERN TÜMEN SEFERBERLİĞİ (Piyade, Zırhlı Tank, Topçu, Hava/SİHA)
     // ------------------------------------------------------------------------
-    if (nationState.gold > 260 && nationState.manpower > 80) {
+    if (nationState.gold > 230 && nationState.manpower > 60) {
       const borderProvs = provinces.filter(p =>
         (p.neighbors || []).some(nId => {
           const np = this._getProvinceById(nId);
@@ -7914,13 +10781,16 @@ SoH.AI = {
 
       if (targetProv) {
         let unitType = 'infantry';
-        if (nationState.gold >= 340 && ['abd', 'turkiye', 'cin', 'rusya', 'ingiltere', 'fransa', 'japonya'].includes(nationId)) {
-          unitType = Math.random() < 0.5 ? 'airforce' : 'tank';
-        } else if (nationState.gold >= 260 && ['almanya', 'polonya', 'iran', 'hindistan', 'iskandinavya'].includes(nationId)) {
-          unitType = Math.random() < 0.5 ? 'tank' : 'artillery';
+        const pref = pCfg.preferredUnits || ['infantry'];
+        if (nationState.gold >= 340 && pref.includes('airforce')) {
+          unitType = 'airforce';
+        } else if (nationState.gold >= 260 && pref.includes('tank')) {
+          unitType = 'tank';
+        } else if (nationState.gold >= 210 && pref.includes('artillery')) {
+          unitType = 'artillery';
         }
 
-        const uCfg = (SoH.CONFIG.UNIT_TYPES && SoH.CONFIG.UNIT_TYPES[unitType]) || { name: 'Motorize Piyade Tümeni', icon: '🪖' };
+        const uCfg = (SoH.CONFIG.UNIT_TYPES && SoH.CONFIG.UNIT_TYPES[unitType]) || { name: 'Piyade Tümeni', icon: '🪖' };
         const ok = this._recruitUnitInProvince(targetProv, unitType, nationId);
         if (ok) {
           const cityLabel = targetProv.cityName || targetProv.name;
@@ -7929,15 +10799,51 @@ SoH.AI = {
             leaderLabel,
             uCfg.icon || '🪖',
             `${cityLabel} Garnizonuna ${uCfg.name} Konuşlandırdı`,
-            `Ulusal savunma ve sınır caydırıcılığı kapsamında ${cityLabel} ordusunu ${totalGarrison} kuvvete yükseltti.`,
-            { agentRole: `Ajan 3 • ${nationCfg.personality}`, nationId, utilityScore: 84 }
+            `Ulusal savunma ve sınır caydırıcılığı kapsamında ${cityLabel} ordusunu ${totalGarrison} kuvvete yükseltti (${diffCfg.name} Zorluk).`,
+            { agentRole: `Ajan 3 • ${pCfg.name}`, nationId, utilityScore: 84 }
           );
         }
       }
     }
 
     // ------------------------------------------------------------------------
-    // 4. KÜRESEL DİPLOMASİ, DOĞAL İTTİFAKLAR VE CEPHE SAVAŞLARI
+    // 4. MÜZAKERELİ BARIŞ ANLAŞMASI (War Fatigue & Decisive War Score)
+    // ------------------------------------------------------------------------
+    if (Array.isArray(nationState.atWarWith) && nationState.atWarWith.length > 0 && SoH.WarDiplo) {
+      const enemyId = nationState.atWarWith[0];
+      const fatigue = nationState.warFatigue || 0;
+      const fatigueThreshold = (pCfg.peaceThresholdFatigue || 70) - (diffCfg.peaceWillingnessBias || 0);
+
+      if (fatigue >= fatigueThreshold || Math.random() < 0.20) {
+        const war = SoH.WarDiplo.findWar ? SoH.WarDiplo.findWar(nationId, enemyId) : null;
+        if (war) {
+          const myScore = war.scores ? (war.scores[nationId] || 0) : 0;
+          let peaceOffer = { type: 'white' };
+
+          if (myScore >= 25) {
+            peaceOffer = { type: 'cede' };
+          } else if (myScore <= -20 && fatigue > 65) {
+            peaceOffer = { type: 'tribute' };
+          }
+
+          const res = SoH.WarDiplo.negotiatePeace(nationId, enemyId, peaceOffer);
+          if (res && res.ok) {
+            const enemyCfg = SoH.CONFIG.NATIONS[enemyId] || {};
+            this.logDecision(
+              leaderLabel,
+              '🕊️',
+              `${enemyCfg.name || enemyId} ile Barış Anlaşması İmzalandı`,
+              `Savaş yorgunluğu (%${Math.round(fatigue)}) ve diplomatik müzakereler sonucu çatışmalar durduruldu.`,
+              { agentRole: `Ajan 3 • Barış Diplomasisi`, nationId, utilityScore: 92 }
+            );
+            return;
+          }
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 5. İTTİFAKLAR, TİCARET ANLAŞMALARI & CASUSLUK OPERASYONLARI
     // ------------------------------------------------------------------------
     for (const pair of this.NATURAL_AFFINITIES) {
       const partnerId = pair[0] === nationId ? pair[1] : (pair[1] === nationId ? pair[0] : null);
@@ -7953,9 +10859,9 @@ SoH.AI = {
               this.logDecision(
                 leaderLabel,
                 '🤝',
-                `${partnerCfg ? partnerCfg.name : partnerId} ile Stratejik İttifak Kurdu!`,
-                `Tarihsel, kültürel ve jeopolitik yakınlık doğrultusunda iki devlet arasında ortak savunma ve enerji paktı imzalandı.`,
-                { agentRole: `Ajan 3 • ${nationCfg.personality}`, nationId, utilityScore: 91 }
+                `${partnerCfg ? partnerCfg.name : partnerId} ile Stratejik Savunma İttifakı Kurdu!`,
+                `Tarihsel ve jeopolitik yakınlık doğrultusunda ortak güvenlik paktı imzalandı.`,
+                { agentRole: `Ajan 3 • ${pCfg.name}`, nationId, utilityScore: 91 }
               );
               return;
             }
@@ -7964,10 +10870,36 @@ SoH.AI = {
       }
     }
 
-    if (aggression >= 0.48 || (Array.isArray(nationState.atWarWith) && nationState.atWarWith.length > 0)) {
+    // Casusluk hamlesi (Espionage Missions)
+    if (SoH.WarDiplo && typeof SoH.WarDiplo.spyMission === 'function' && Math.random() < 0.25) {
+      const enemies = (nationState.atWarWith && nationState.atWarWith.length > 0)
+        ? nationState.atWarWith
+        : Object.keys(SoH.CONFIG.NATIONS).filter(id => id !== nationId && this._getRelation(nationId, id) < 35);
+
+      if (enemies.length > 0 && nationState.gold >= 120) {
+        const targetId = enemies[Math.floor(Math.random() * enemies.length)];
+        const mission = (pCfg.espionageFocus && pCfg.espionageFocus[0]) || 'intel';
+        const spyRes = SoH.WarDiplo.spyMission(nationId, targetId, mission);
+        if (spyRes && spyRes.ok) {
+          const targetCfg = SoH.CONFIG.NATIONS[targetId] || {};
+          this.logDecision(
+            leaderLabel,
+            '🕵️',
+            `${targetCfg.shortName || targetId} Ülkesine Casus Gönderildi (${mission})`,
+            `İstihbarat teşkilatı gizli operasyon icra etti.`,
+            { agentRole: `Ajan 3 • İstihbarat Teşkilatı`, nationId, utilityScore: 78 }
+          );
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 6. STRATEJİK HAREKÂT & CASUS BELLI İLE TAARRUZ
+    // ------------------------------------------------------------------------
+    if (aggression >= 0.40 || (Array.isArray(nationState.atWarWith) && nationState.atWarWith.length > 0)) {
       for (const myProv of provinces) {
         const myGarrison = this._getProvinceGarrison(myProv);
-        if (myGarrison < 165) continue;
+        if (myGarrison < 150) continue;
 
         for (const nId of (myProv.neighbors || [])) {
           const defProv = this._getProvinceById(nId);
@@ -7980,8 +10912,13 @@ SoH.AI = {
           const rel = this._getRelation(nationId, defProv.owner);
           const alreadyAtWar = Array.isArray(nationState.atWarWith) && nationState.atWarWith.includes(defProv.owner);
 
-          const requiredRatio = alreadyAtWar ? 1.25 : (aggression >= 0.65 ? 1.40 : 1.58);
-          if (myGarrison > defGarrison * requiredRatio && (alreadyAtWar || rel < 50)) {
+          // Casus Belli hazırlama (Militaristler sebepsiz savaşa girmez, CB uydurur)
+          if (!alreadyAtWar && rel < 38 && SoH.WarDiplo && typeof SoH.WarDiplo.fabricateCb === 'function' && Math.random() < 0.20) {
+            SoH.WarDiplo.fabricateCb(nationId, defProv.owner, 'border');
+          }
+
+          const requiredRatio = alreadyAtWar ? 1.20 : (aggression >= 0.65 ? 1.35 : 1.55);
+          if (myGarrison > defGarrison * requiredRatio && (alreadyAtWar || rel < 45)) {
             const sendTroops = Math.round(myGarrison * 0.65);
             if (SoH.Simulation && typeof SoH.Simulation.orderArmyAction === 'function') {
               SoH.Simulation.orderArmyAction(myProv.id, defProv.id, sendTroops);
@@ -7993,8 +10930,8 @@ SoH.AI = {
               leaderLabel,
               '⚔️',
               `${myCity} → ${defCity} Cephesine Askeri Harekât (${sendTroops} Asker)`,
-              `Sınır garnizon üstünlüğünü (${myGarrison} vs ${defGarrison}) ve jeopolitik doktrinini kullanarak ${defCity} stratejik maden/şehir merkezine taarruz başlattı!`,
-              { agentRole: `Ajan 3 • ${nationCfg.personality}`, nationId, utilityScore: 93 }
+              `Sınır garnizon üstünlüğünü (${myGarrison} vs ${defGarrison}) ve ${pCfg.name} doktrinini kullanarak ${defCity} stratejik merkezine taarruz başlattı!`,
+              { agentRole: `Ajan 3 • ${pCfg.name}`, nationId, utilityScore: 93 }
             );
             return;
           }
@@ -8032,7 +10969,12 @@ SoH.AI = {
       this.runFrontlineMarshalStep();
     }
 
-    // 3. Dünya Liderleri Yapay Zekası: Oyuncu dışındaki tüm gerçek ülkeleri sırayla çalıştır
+    // 3. Küresel Anti-Hegemon Koalisyon Kontrolü (Her 15 tickte bir)
+    if (this._tickCounter % 15 === 0) {
+      this.checkAntiHegemonCoalitions();
+    }
+
+    // 4. Dünya Liderleri Yapay Zekası: Oyuncu dışındaki tüm gerçek ülkeleri sırayla çalıştır
     const allNationIds = Object.keys(SoH.CONFIG.NATIONS).filter(id => id !== playerNationId);
     if (allNationIds.length > 0) {
       const idx1 = (this._tickCounter * 2) % allNationIds.length;
@@ -10557,73 +13499,142 @@ SoH.UI = {
               .join('')}
           </div>
         </div>
+
+        <div class="soft-card" style="border-color:rgba(56,189,248,0.35);">
+          <div class="section-label">
+            <span>🏗️ Şehir Altyapı Düzeyi & Metropol Gelişimi</span>
+            <span class="badge online">${prov.infrastructure ? prov.infrastructure.tier : 'Sınır Şehri'}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+              <div style="font-weight:700;color:#fff;font-size:13px;">
+                Altyapı Seviyesi: ${prov.infrastructure ? prov.infrastructure.level : 1} / 10
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);">
+                Günlük Bakım Gideri: -${prov.infrastructure ? prov.infrastructure.upkeep : 25} ₺ • Nüfus: ${this.formatPop(prov.population || 0)}
+              </div>
+            </div>
+            ${
+              isPlayerProv
+                ? `<button class="pill-btn active" style="white-space:nowrap;padding:7px 12px;"
+                           onclick="SoH.TechPolitics && SoH.TechPolitics.upgradeCityInfrastructure('${prov.id}'); SoH.Audio.play('build'); SoH.UI.refresh();">
+                     🏗️ Altyapıyı Yükselt
+                   </button>`
+                : ''
+            }
+          </div>
+          <p style="font-size:10.5px;color:var(--text-muted);margin:0;">
+            Şehir altyapısı geliştikçe nüfus göçü hızlanır, halk sağlığı yükselir ve şehir Seviyesi <i>(Sınır Şehri → Büyükşehir → Metropol → Küresel Megakent)</i> kademesine ulaşarak daha yüksek tesis seviyelerinin kilidini açar.
+          </p>
+        </div>
       `;
     }
 
-    // ==================== 2. KÜRESEL EMTİA & KAYNAK TİCARETİ PANELİ ====================
+    // ==================== 2. KÜRESEL EMTİA & DİNAMİK BORSA PANELİ ====================
     else if (this.activePanel === 'ticaret') {
-      titleEl.textContent = `Küresel Emtia & Kaynak Borsası`;
-      subEl.textContent = `Yeraltı madenleri, petrol, uranyum, tahıl ve hayvancılık ithalat/ihracatı`;
+      titleEl.textContent = `Küresel Emtia Borsası & Üretim Zinciri`;
+      subEl.textContent = `Dinamik arz-talep fiyatları, sanayi mamulleri ve serbest piyasa ticareti`;
 
       const sp = p.stockpile || {};
       const net = p.dailyResources || {};
-      const autoExp = p.autoExport || {};
+      const eco = (SoH.Economy && SoH.Economy.ensure) ? SoH.Economy.ensure() : null;
+      const prices = (eco && eco.prices) || {};
+      const supply = (eco && eco.globalSupply) || {};
+      const demand = (eco && eco.globalDemand) || {};
+      const goodInfo = (SoH.Economy && SoH.Economy.GOOD_INFO) || {};
 
       body.innerHTML = `
         <div class="soft-card">
-          <div class="section-label">🚢 Ulusal Dış Ticaret & Emtia Dengesi</div>
+          <div class="section-label">📈 Küresel Serbest Piyasa Göstergeleri</div>
           <div class="stat-grid">
             <div class="stat-box">
               <div class="stat-label">Hazine Rezervi</div>
               <div class="stat-value" style="color:#fbbf24;">${Math.floor(p.gold).toLocaleString('tr-TR')} ₺</div>
             </div>
             <div class="stat-box">
-              <div class="stat-label">Günlük İhracat Geliri</div>
+              <div class="stat-label">Günlük Dış Ticaret</div>
               <div class="stat-value" style="color:#34d399;">+${Math.round(p.tradeRevenue || 0)} ₺ / gün</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Gümrük Tarifesi Geliri</div>
+              <div class="stat-value" style="color:#38bdf8;">+${Math.round(p.customsRevenue || 0)} ₺ / gün</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Aktif İhracat Oranı</div>
+              <div class="stat-value" style="color:#a7f3d0;">%${p.customsTariff || 10} Tarife</div>
             </div>
           </div>
           <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">
-            Maden ocaklarınızdan ve besi çiftliklerinizden çıkan fazla <b>Demir, Petrol, Uranyum, Altın, Bor, Tahıl ve Hayvancılık</b> ürünlerini dünya borsasında satarak hazinenizi büyütebilirsiniz.
+            Fiyatlar tüm dünyadaki arz ve talebe göre anlık dalgalanır. Savaştaki ülkeler petrol ve çelik talebini artırırken, aşırı üretim fiyatları düşürür.
           </p>
         </div>
 
-        ${Object.values(SoH.CONFIG.RESOURCES)
-          .map((rc) => {
-            const stock = Math.floor(sp[rc.id] || 0);
-            const daily = Math.round((net[rc.id] || 0) * 10) / 10;
-            const isAuto = !!autoExp[rc.id];
-            const sellVal = Math.round(50 * rc.basePrice);
-            const buyCost = Math.round(50 * rc.basePrice * 1.1);
+        <div class="soft-card">
+          <div class="section-label">🏭 Sanayi & Üretim Zinciri Durumu (Günlük Katma Değer)</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px;">
+            <div class="stat-box">
+              <div class="stat-label">⚙️ Çelik Üretimi</div>
+              <div class="stat-value" style="color:#94a3b8;">+${(p.chainOutputDaily && p.chainOutputDaily.steel) || 0}/g</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">🥫 Paketli Gıda</div>
+              <div class="stat-value" style="color:#86efac;">+${(p.chainOutputDaily && p.chainOutputDaily.packaged_food) || 0}/g</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">⚡ Rafine Yakıt</div>
+              <div class="stat-value" style="color:#fde047;">+${(p.chainOutputDaily && p.chainOutputDaily.fuel_energy) || 0}/g</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">📱 Tüketim Malları</div>
+              <div class="stat-value" style="color:#67e8f9;">+${(p.chainOutputDaily && p.chainOutputDaily.consumer_goods) || 0}/g</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">⚛️ Nükleer Yakıt</div>
+              <div class="stat-value" style="color:#c084fc;">+${(p.chainOutputDaily && p.chainOutputDaily.enriched_uranium) || 0}/g</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">🪙 Altın Geliri</div>
+              <div class="stat-value" style="color:#fbbf24;">+${Math.round((p.stockpile && p.stockpile.gold_ore || 0) * 0.15)}/g</div>
+            </div>
+          </div>
+        </div>
+
+        ${(SoH.Economy ? SoH.Economy.ALL_MARKET_KEYS : Object.keys(SoH.CONFIG.RESOURCES))
+          .map((k) => {
+            const inf = goodInfo[k] || (SoH.CONFIG.RESOURCES[k] || { name: k, icon: '📦', category: 'Emtia' });
+            const curPrice = prices[k] || (SoH.CONFIG.RESOURCES[k] ? SoH.CONFIG.RESOURCES[k].basePrice : 25);
+            const basePrice = (SoH.BALANCE && SoH.BALANCE.economy && SoH.BALANCE.economy.basePrices[k]) || curPrice;
+            const priceDiff = Math.round(((curPrice - basePrice) / basePrice) * 100);
+            const trendIcon = priceDiff > 0 ? `<span style="color:#f87171;">▲ +%${priceDiff}</span>` : (priceDiff < 0 ? `<span style="color:#4ade80;">▼ %${priceDiff}</span>` : `<span style="color:#94a3b8;">— %0</span>`);
+            const stock = Math.floor(sp[k] || 0);
+            const sellVal = Math.round(50 * curPrice * 0.95);
+            const buyCost = Math.round(50 * curPrice * 1.08);
 
             return `
               <div class="soft-card">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
                   <div>
-                    <span style="font-size:16px;">${rc.icon}</span>
-                    <span style="font-weight:700;font-size:13px;color:#fff;margin-left:4px;">${rc.name}</span>
-                    <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">Birim Fiyat: ${rc.basePrice} ₺</span>
+                    <span style="font-size:16px;">${inf.icon}</span>
+                    <span style="font-weight:700;font-size:13px;color:#fff;margin-left:4px;">${inf.name}</span>
+                    <span style="font-size:10.5px;color:var(--text-muted);margin-left:6px;">${inf.category}</span>
                   </div>
-                  <span class="badge online">Stok: ${stock.toLocaleString('tr-TR')}</span>
+                  <div style="text-align:right;">
+                    <span style="font-weight:700;color:#fde047;font-size:12.5px;">${curPrice} ₺</span>
+                    <span style="font-size:10.5px;margin-left:5px;">${trendIcon}</span>
+                  </div>
                 </div>
                 <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:8px;">
-                  <span>${rc.desc}</span>
-                  <b style="color:${daily >= 0 ? '#34d399' : '#fb7185'};white-space:nowrap;margin-left:8px;">
-                    ${daily >= 0 ? '+' : ''}${daily}/gün
-                  </b>
+                  <span>Küresel Arz: ${supply[k] || 100} • Talep: ${demand[k] || 100}</span>
+                  <span class="badge online">Milli Stok: ${stock.toLocaleString('tr-TR')}</span>
                 </div>
                 <div style="display:flex;gap:6px;">
                   <button class="pill-btn active" style="flex:1;"
-                          onclick="SoH.Simulation.tradeResource('${rc.id}','sell',50); SoH.Audio.play('build'); SoH.UI.refresh();">
+                          onclick="SoH.Economy && SoH.Economy.tradeCommodity('${k}','sell',50); SoH.Audio.play('build'); SoH.UI.refresh();">
                     📤 50 Sat (+${sellVal} ₺)
                   </button>
                   <button class="pill-btn" style="flex:1;"
-                          onclick="SoH.Simulation.tradeResource('${rc.id}','buy',50); SoH.Audio.play('click'); SoH.UI.refresh();">
+                          onclick="SoH.Economy && SoH.Economy.tradeCommodity('${k}','buy',50); SoH.Audio.play('click'); SoH.UI.refresh();">
                     📥 50 İthal Et (-${buyCost} ₺)
-                  </button>
-                  <button class="pill-btn ${isAuto ? 'active' : ''}"
-                          onclick="SoH.Simulation.toggleAutoExport('${rc.id}'); SoH.UI.refresh();"
-                          title="Stok 180'i aştığında fazlasını her gün otomatik ihraç eder">
-                    ${isAuto ? '🟢 Oto-İhraç' : '⚪ Oto-İhraç'}
                   </button>
                 </div>
               </div>
@@ -10787,23 +13798,27 @@ SoH.UI = {
       `;
     }
 
-    // ==================== 5. EKONOMİ, BÜTÇE & VERGİ PANELİ ====================
+    // ==================== 5. EKONOMİ, BÜTÇE, FAİZ & KAMU BORCU PANELİ ====================
     else if (this.activePanel === 'ekonomi') {
-      titleEl.textContent = `Ekonomi, Bütçe & Vergi Politikası`;
-      subEl.textContent = `Merkez bankası, bakanlık ödenekleri ve şehir gelirleri`;
+      titleEl.textContent = `Ekonomi, Bütçe & Merkez Bankası`;
+      subEl.textContent = `Enflasyon, politika faizi, kamu borcu, gümrük tarifeleri ve bakanlık ödenekleri`;
 
       const bdg = p.budget || { taxRate: p.taxRate || 15, educationSpend: 50, healthSpend: 50, militarySpend: 60 };
       const playerProvs = Object.values(st.provinces).filter((pr) => pr.owner === pid);
-      const totalIncome = playerProvs.reduce((s, pr) => s + (pr.goldIncome || 0), 0) + (p.tradeRevenue || 0);
+      const totalIncome = playerProvs.reduce((s, pr) => s + (pr.goldIncome || 0), 0) + (p.tradeRevenue || 0) + (p.customsRevenue || 0);
       const totalMaint = playerProvs.reduce((s, pr) => s + (pr.maintenance || 0), 0);
-      const netDaily = totalIncome - totalMaint;
+      const debtInterest = p.nationalDebt > 0 ? Math.round((p.nationalDebt * ((p.interestRate || 5) / 100)) / 240) : 0;
+      const netDaily = totalIncome - totalMaint - debtInterest;
+      const infRate = p.inflationRate !== undefined ? p.inflationRate : 2.8;
+      const debt = p.nationalDebt || 0;
+      const rating = p.bondRating || 'AAA';
 
       body.innerHTML = `
         <div class="soft-card">
-          <div class="section-label">💰 Merkez Bankası & Hazine Özeti</div>
+          <div class="section-label">🏛️ Makroekonomik Göstergeler & Hazine Dengesi</div>
           <div class="stat-grid">
             <div class="stat-box">
-              <div class="stat-label">Mevcut Hazine Rezervi</div>
+              <div class="stat-label">Hazine Rezervi</div>
               <div class="stat-value" style="color:#fbbf24;">${Math.floor(p.gold).toLocaleString('tr-TR')} ₺</div>
             </div>
             <div class="stat-box">
@@ -10813,21 +13828,43 @@ SoH.UI = {
               </div>
             </div>
             <div class="stat-box">
-              <div class="stat-label">Vergi + Maden İhracatı</div>
-              <div class="stat-value" style="color:#38bdf8;">+${Math.round(totalIncome)} ₺</div>
+              <div class="stat-label">Yıllık Enflasyon</div>
+              <div class="stat-value" style="color:${infRate > 8 ? '#f87171' : '#38bdf8'};">%${infRate.toFixed(1)}</div>
             </div>
             <div class="stat-box">
-              <div class="stat-label">Tesis & Ordu Gideri</div>
-              <div class="stat-value" style="color:#fb7185;">-${Math.round(totalMaint)} ₺</div>
+              <div class="stat-label">Kredi Notu</div>
+              <div class="stat-value" style="color:${rating.startsWith('A') ? '#4ade80' : '#facc15'};">${rating}</div>
             </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);">
+            <span>Milli Borç Stoku: <b style="color:${debt > 0 ? '#fb7185' : '#34d399'};">${debt.toLocaleString('tr-TR')} ₺</b></span>
+            <span>Günlük Faiz Yükü: <b style="color:#fb7185;">-${debtInterest} ₺</b></span>
           </div>
         </div>
 
         <div class="soft-card">
-          <div class="section-label">⚖️ Vergi & Bakanlık Bütçe Kaydırıcıları</div>
+          <div class="section-label">🏦 Hazine Borçlanması & Tahvil İhracı</div>
+          <p style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">
+            Bütçe açığı durumunda Dünya Bankası ve tahvil piyasasından borç alabilir, bütçe fazlası verdiğinizde borcunuzu kapatarak faiz yükünü hafifletebilirsiniz.
+          </p>
+          <div style="display:flex;gap:7px;">
+            <button class="pill-btn active" style="flex:1;"
+                    onclick="SoH.Economy && SoH.Economy.borrowDebt(500); SoH.Audio.play('build'); SoH.UI.refresh();">
+              🏛️ +500 ₺ Tahvil İhraç Et
+            </button>
+            <button class="pill-btn ${debt > 0 ? 'active' : ''}" style="flex:1;"
+                    onclick="SoH.Economy && SoH.Economy.repayDebt(500); SoH.Audio.play('click'); SoH.UI.refresh();">
+              ✅ -500 ₺ Borç Kapat
+            </button>
+          </div>
+        </div>
+
+        <div class="soft-card">
+          <div class="section-label">⚖️ Maliye & Para Politikası Kaydırıcıları</div>
+          
           <div class="slider-row">
             <div class="slider-top">
-              <span>Gelir & Kurumlar Vergisi</span>
+              <span>Gelir & Kurumlar Vergisi Oranı</span>
               <span style="color:#fbbf24;">%${p.taxRate || 15}</span>
             </div>
             <input type="range" class="soft-slider" min="5" max="35" value="${p.taxRate || 15}"
@@ -10836,8 +13873,26 @@ SoH.UI = {
 
           <div class="slider-row" style="margin-top:8px;">
             <div class="slider-top">
+              <span>Gümrük İthalat Tarifesi (Korumacılık)</span>
+              <span style="color:#38bdf8;">%${p.customsTariff || 10}</span>
+            </div>
+            <input type="range" class="soft-slider" min="0" max="45" value="${p.customsTariff || 10}"
+                   onchange="SoH.Economy && SoH.Economy.setCustomsTariff(parseInt(this.value,10)); SoH.UI.refresh();" />
+          </div>
+
+          <div class="slider-row" style="margin-top:8px;">
+            <div class="slider-top">
+              <span>Merkez Bankası Politika Faizi</span>
+              <span style="color:#a7f3d0;">%${(p.interestRate || 5).toFixed(1)}</span>
+            </div>
+            <input type="range" class="soft-slider" min="1" max="20" step="0.5" value="${p.interestRate || 5}"
+                   onchange="SoH.Economy && SoH.Economy.setInterestRate(parseFloat(this.value)); SoH.UI.refresh();" />
+          </div>
+
+          <div class="slider-row" style="margin-top:8px;">
+            <div class="slider-top">
               <span>🎓 Eğitim & Bilim Yatırımı</span>
-              <span style="color:#38bdf8;">%${bdg.educationSpend || 50}</span>
+              <span style="color:#c084fc;">%${bdg.educationSpend || 50}</span>
             </div>
             <input type="range" class="soft-slider" min="10" max="100" value="${bdg.educationSpend || 50}"
                    onchange="SoH.Simulation.setBudgetSlider && SoH.Simulation.setBudgetSlider('educationSpend', parseInt(this.value,10)); SoH.UI.refresh();" />
@@ -10845,7 +13900,7 @@ SoH.UI = {
 
           <div class="slider-row" style="margin-top:8px;">
             <div class="slider-top">
-              <span>🏥 Sağlık & Beslenme Destek Bütçesi</span>
+              <span>🏥 Sağlık & Beslenme Bütçesi</span>
               <span style="color:#34d399;">%${bdg.healthSpend || 50}</span>
             </div>
             <input type="range" class="soft-slider" min="10" max="100" value="${bdg.healthSpend || 50}"
@@ -10876,7 +13931,49 @@ SoH.UI = {
       const grainDemand = Math.max(1, Math.round((p.foodDemandGrain || totalPop / 2200000) * 10) / 10);
       const meatDemand = Math.max(1, Math.round((p.foodDemandLivestock || totalPop / 2800000) * 10) / 10);
 
+      const stability = Math.round(p.stability !== undefined ? p.stability : 78);
+      const happiness = Math.round(p.happiness !== undefined ? p.happiness : 75);
+      const curGov = p.government || 'democracy';
+      const govs = (SoH.BALANCE && SoH.BALANCE.politics && SoH.BALANCE.politics.governments) || {};
+
       body.innerHTML = `
+        <div class="soft-card" style="border-color:rgba(168,85,247,0.35);">
+          <div class="section-label">
+            <span>🏛️ İç Siyaset, Hükümet Rejimi & İstikrar</span>
+            <span class="badge ${stability >= 60 ? 'online' : (stability >= 35 ? 'warn' : 'war')}">İstikrar: %${stability}</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+            <div style="background:rgba(15,23,42,0.6);padding:8px 12px;border-radius:10px;">
+              <div style="font-size:10.5px;color:var(--text-muted);">Milli Mutluluk Seviyesi</div>
+              <div style="font-size:16px;font-weight:800;color:#38bdf8;">%${happiness}</div>
+              <div style="background:rgba(255,255,255,0.1);height:4px;border-radius:2px;margin-top:4px;overflow:hidden;">
+                <div style="background:#38bdf8;height:100%;width:${happiness}%;"></div>
+              </div>
+            </div>
+            <div style="background:rgba(15,23,42,0.6);padding:8px 12px;border-radius:10px;">
+              <div style="font-size:10.5px;color:var(--text-muted);">Ulusal İstikrar Endeksi</div>
+              <div style="font-size:16px;font-weight:800;color:${stability >= 60 ? '#4ade80' : (stability >= 35 ? '#fbbf24' : '#f87171')};">%${stability}</div>
+              <div style="background:rgba(255,255,255,0.1);height:4px;border-radius:2px;margin-top:4px;overflow:hidden;">
+                <div style="background:${stability >= 60 ? '#4ade80' : (stability >= 35 ? '#fbbf24' : '#f87171')};height:100%;width:${stability}%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Hükümet Türü Seçimi (Rejim Reformu: 300 ₺):</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            ${Object.values(govs).map(g => `
+              <button class="pill-btn ${curGov === g.id ? 'active' : ''}" style="text-align:left;padding:7px 10px;font-size:11px;"
+                      onclick="SoH.TechPolitics && SoH.TechPolitics.setGovernment('${g.id}');">
+                ${g.icon} <b>${g.name}</b>
+              </button>
+            `).join('')}
+          </div>
+          <div style="font-size:10.5px;color:rgba(255,255,255,0.6);margin-top:8px;">
+            ${govs[curGov] ? govs[curGov].desc : ''}
+          </div>
+        </div>
+
         <div class="soft-card">
           <div class="section-label">
             <span>🌾🐄 Ulusal Beslenme & Gıda Arzı</span>
@@ -10932,10 +14029,61 @@ SoH.UI = {
 
     // ==================== 7. ÜLKELER, DİPLOMASİ, BİLİM & AI PANELİ ====================
     else if (this.activePanel === 'diplomasi') {
-      titleEl.textContent = `Dünya Devletleri, Bilim & AI Otomasyon`;
-      subEl.textContent = `Diplomasi, teknoloji araştırmaları ve yapay zeka bakanlar`;
+      titleEl.textContent = `Dünya Devletleri, Bilim, İç Siyaset & Kayıt`;
+      subEl.textContent = `Diplomasi, 4 dallı teknoloji ağacı, zafer koşulları ve oyun kaydı`;
+
+      const allTechs = (SoH.BALANCE && SoH.BALANCE.techTree && SoH.BALANCE.techTree.techs) || SoH.CONFIG.TECHS;
+      const branches = (SoH.BALANCE && SoH.BALANCE.techTree && SoH.BALANCE.techTree.branches) || {};
+      const curTechId = p.activeResearch;
+      const activeTech = allTechs.find(t => t.id === curTechId);
+      const curProgress = p.researchProgress || 0;
+      const activeCost = activeTech ? activeTech.cost : 100;
+      const pct = Math.min(100, Math.round((curProgress / activeCost) * 100));
+
+      const coalition = st.diplomacy && st.diplomacy.coalitions && st.diplomacy.coalitions.antiHegemon;
+      const diffKey = st.difficulty || 'normal';
+      const difficulties = (SoH.BALANCE && SoH.BALANCE.ai && SoH.BALANCE.ai.difficulties) || {};
 
       body.innerHTML = `
+        <!-- OYUN YÖNETİMİ, KAYIT & ZORLUK ÇUBUĞU -->
+        <div class="soft-card" style="border-color:rgba(56,189,248,0.4);">
+          <div class="section-label">
+            <span>💾 Oyun Akışı, Kayıt & Zorluk Seviyesi</span>
+            <span class="badge online">${difficulties[diffKey] ? difficulties[diffKey].name : 'Normal'}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+            <button class="pill-btn active" style="text-align:center;padding:7px;"
+                    onclick="SoH.GameFlow && SoH.GameFlow.saveGame('manual');">
+              💾 Oyunu Kaydet
+            </button>
+            <button class="pill-btn" style="text-align:center;padding:7px;"
+                    onclick="SoH.GameFlow && SoH.GameFlow.loadGame('manual');">
+              📂 Kayıtlı Oyunu Yükle
+            </button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Zorluk Derecesi:</div>
+          <div style="display:flex;gap:4px;">
+            ${['easy', 'normal', 'hard', 'ironman'].map(dk => `
+              <button class="pill-btn ${diffKey === dk ? 'active' : ''}" style="flex:1;font-size:10px;padding:5px 2px;text-align:center;"
+                      onclick="SoH.state.difficulty = '${dk}'; SoH.UI.showToast('Zorluk: ${difficulties[dk]?.name || dk} seçildi.', 'info'); SoH.UI.refresh();">
+                ${difficulties[dk]?.icon || ''} ${difficulties[dk]?.name || dk}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        ${coalition ? `
+          <div class="soft-card" style="border-color:#f43f5e;background:rgba(239,68,68,0.12);">
+            <div class="section-label" style="color:#fda4af;">
+              <span>🌐 KÜRESEL TEHDİT: ${coalition.name}</span>
+              <span class="badge war">${coalition.members.length} Üye</span>
+            </div>
+            <div style="font-size:11.5px;color:#fecdd3;line-height:1.4;">
+              <b>${SoH.CONFIG.NATIONS[coalition.target]?.name || coalition.target}</b> devleti aşırı büyüdüğü için dünya dengesini korumak amacıyla koalisyon kuruldu!
+            </div>
+          </div>
+        ` : ''}
+
         <div class="soft-card">
           <div class="section-label">🤖 Yapay Zeka Bakanlar & Otomasyon</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
@@ -10950,27 +14098,59 @@ SoH.UI = {
           </div>
         </div>
 
-        <div class="soft-card">
-          <div class="section-label">🔬 Ulusal Teknoloji & Sondaj Odakları (🎓 ${Math.floor(p.research)} Puan)</div>
+        <!-- 4 DALLI TEKNOLOJİ VE BİLİM AĞACI -->
+        <div class="soft-card" style="border-color:rgba(52,211,153,0.35);">
+          <div class="section-label">
+            <span>🔬 4 Dallı Ulusal Teknoloji Ağacı</span>
+            <span class="badge online">🎓 ${Math.floor(p.research || 0)} Bilim / Gün</span>
+          </div>
+
+          ${activeTech ? `
+            <div style="background:rgba(15,23,42,0.7);border:1px solid #10b981;border-radius:12px;padding:10px 12px;margin-bottom:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-size:12.5px;font-weight:800;color:#34d399;">🔬 Aktif Araştırma: ${activeTech.icon} ${activeTech.name}</span>
+                <span style="font-size:11px;color:#38bdf8;">%${pct} (${Math.floor(curProgress)}/${activeTech.cost} 🎓)</span>
+              </div>
+              <div style="background:rgba(255,255,255,0.1);height:6px;border-radius:3px;overflow:hidden;">
+                <div style="background:#10b981;height:100%;width:${pct}%;transition:width 0.3s;"></div>
+              </div>
+            </div>
+          ` : `
+            <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px;">
+              Şu an aktif araştırma yok. Aşağıdaki 4 bilim dalından birini seçerek laboratuvarları başlatın:
+            </div>
+          `}
+
+          <!-- Teknoloji Listesi -->
           <div style="display:flex;flex-direction:column;gap:7px;">
-            ${SoH.CONFIG.TECHS.map((t) => {
+            ${allTechs.map((t) => {
               const unlocked = p.unlockedTechs && p.unlockedTechs.includes(t.id);
+              const isActive = curTechId === t.id;
+              const b = branches[t.branch] || { name: 'Genel', icon: '🔬', color: '#38bdf8' };
               return `
-                <div style="background:rgba(15,23,42,0.55);border:1px solid ${unlocked ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.06)'};border-radius:12px;padding:9px 11px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-                  <div>
-                    <div style="font-weight:700;font-size:12px;color:#fff;">${t.name}</div>
-                    <div style="font-size:10.5px;color:var(--text-muted);">${t.desc}</div>
+                <div style="background:rgba(15,23,42,0.55);border:1px solid ${unlocked ? 'rgba(16,185,129,0.4)' : (isActive ? 'rgba(56,189,248,0.5)' : 'rgba(255,255,255,0.06)')};border-radius:12px;padding:9px 11px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <div style="flex:1;">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                      <span style="font-size:15px;">${t.icon || b.icon}</span>
+                      <span style="font-weight:700;font-size:12px;color:#fff;">${t.name}</span>
+                      <span style="font-size:9.5px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,0.08);color:${b.color};">${b.name} • T${t.tier || 1}</span>
+                    </div>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${t.desc}</div>
                   </div>
                   ${
                     unlocked
-                      ? `<span class="badge online">Aktif</span>`
-                      : `<button class="pill-btn active" onclick="SoH.Simulation.unlockTech('${t.id}');SoH.UI.refresh();">${t.cost} 🎓</button>`
+                      ? `<span class="badge online">Tamamlandı</span>`
+                      : (isActive
+                          ? `<span class="badge online" style="background:#0284c7;">Araştırılıyor</span>`
+                          : `<button class="pill-btn active" onclick="SoH.TechPolitics && SoH.TechPolitics.startResearch('${t.id}'); SoH.UI.refresh();">${t.cost} 🎓 Başlat</button>`
+                        )
                   }
                 </div>`;
             }).join('')}
           </div>
         </div>
 
+        <!-- DÜNYA DEVLETLERİ VE JEOPOLİTİK KİŞİLİKLER -->
         <div class="soft-card">
           <div class="section-label">🌍 Dünya Devletleri (${Object.keys(SoH.CONFIG.NATIONS).length} Ülke)</div>
           <div style="display:flex;flex-direction:column;gap:8px;">
@@ -10981,19 +14161,24 @@ SoH.UI = {
                 const atWar = p.atWarWith && p.atWarWith.includes(n.id);
                 const isAlly = p.allies && p.allies.includes(n.id);
                 const ownedProvs = Object.values(st.provinces).filter((pr) => pr.owner === n.id);
+                const pInfo = (SoH.AI && SoH.AI._getAIPersonality) ? SoH.AI._getAIPersonality(n.id) : { cfg: { name: n.personality, icon: '🌍' } };
+
                 return `
                   <div style="background:rgba(15,23,42,0.6);border-left:4px solid ${n.color};border-radius:12px;padding:10px 12px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                       <span style="font-weight:700;font-size:13px;color:#fff;">${n.flag || ''} ${n.name}</span>
-                      <span class="badge ${atWar ? 'war' : 'online'}">${atWar ? 'Savaşta' : isAlly ? 'Müttefik' : `İlişki ${rel}`}</span>
+                      <span class="badge ${atWar ? 'war' : (isAlly ? 'online' : 'warn')}">${atWar ? 'Savaşta' : (isAlly ? 'Müttefik' : `İlişki ${rel}`)}</span>
                     </div>
-                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
-                      ${n.personality} • ${ownedProvs.length} Şehir
+                    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+                      <span style="color:#f59e0b;">${pInfo.cfg.icon} ${pInfo.cfg.name}</span>
+                      <span>•</span>
+                      <span>${ownedProvs.length} Şehir</span>
                     </div>
+                    ${SoH.WarDiplo ? SoH.WarDiplo.nationInfo(pid, n.id) : ''}
                     <div class="pill-group">
                       ${
                         atWar
-                          ? `<button class="pill-btn" onclick="SoH.Simulation.makePeace('${pid}','${n.id}');SoH.UI.refresh()">🕊️ Barış Yap</button>`
+                          ? `<button class="pill-btn" onclick="SoH.Simulation.makePeace('${pid}','${n.id}');SoH.UI.refresh()">🕊️ Barış Müzakeresi</button>`
                           : `<button class="pill-btn" style="color:#fda4af" onclick="SoH.Simulation.declareWar('${pid}','${n.id}');SoH.Audio.play('horn');SoH.UI.refresh()">⚔️ Savaş Aç</button>`
                       }
                       <button class="pill-btn" onclick="SoH.Simulation.sendGift('${pid}','${n.id}');SoH.UI.refresh()">🎁 Ticaret Heyeti (150₺)</button>
@@ -11004,6 +14189,7 @@ SoH.UI = {
                       }
                       <button class="pill-btn" onclick="SoH.Simulation.switchPlayerNation('${n.id}');SoH.UI.refresh();">👑 Ülkeyi Yönet</button>
                     </div>
+                    ${SoH.WarDiplo ? SoH.WarDiplo.nationButtons(pid, n.id) : ''}
                   </div>`;
               })
               .join('')}
@@ -11011,6 +14197,24 @@ SoH.UI = {
         </div>
       `;
     }
+  },
+
+  showToast(msg, type) {
+    let box = document.getElementById('soh-toast-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'soh-toast-box';
+      box.style.cssText = 'position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;max-width:min(560px,92vw);';
+      document.body.appendChild(box);
+    }
+    const colors = { info: '#38bdf8', success: '#4ade80', warning: '#fb923c', war: '#f87171' };
+    const el = document.createElement('div');
+    el.style.cssText = 'background:rgba(9,14,26,0.94);backdrop-filter:blur(10px);color:#f8fafc;border:1px solid ' + (colors[type] || colors.info) + ';border-radius:12px;padding:8px 14px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.55);opacity:0;transition:opacity .25s;';
+    el.textContent = msg;
+    box.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = '1'; });
+    while (box.children.length > 4) box.removeChild(box.firstChild);
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 4800);
   },
 
   renderLogs() {
