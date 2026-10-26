@@ -984,15 +984,15 @@ SoH.CONFIG = {
     '368': 'iran',    // Irak
     '760': 'iran',    // Suriye
     '004': 'iran',    // Afganistan
-    '682': 'arabistan', // Suudi Arabistan
-    '784': 'arabistan', // BAE
-    '634': 'arabistan', // Katar
-    '414': 'arabistan', // Kuveyt
-    '512': 'arabistan', // Umman
-    '887': 'arabistan', // Yemen
-    '400': 'arabistan', // Ürdün
-    '376': 'arabistan', // İsrail
-    '422': 'arabistan', // Lübnan
+    '682': 'suudi', // Suudi Arabistan
+    '784': 'suudi', // BAE
+    '634': 'suudi', // Katar
+    '414': 'suudi', // Kuveyt
+    '512': 'suudi', // Umman
+    '887': 'suudi', // Yemen
+    '400': 'suudi', // Ürdün
+    '376': 'suudi', // İsrail
+    '422': 'suudi', // Lübnan
     '818': 'misir',   // Mısır
     '434': 'misir',   // Libya
     '788': 'misir',   // Tunus
@@ -1024,35 +1024,35 @@ SoH.CONFIG = {
     '246': 'iskandinavya', // Finlandiya
     '208': 'iskandinavya', // Danimarka
     '352': 'iskandinavya', // İzlanda
-    '710': 'afrika_birligi', // Güney Afrika
-    '566': 'afrika_birligi', // Nijerya
-    '180': 'afrika_birligi', // Kongo DC
-    '404': 'afrika_birligi', // Kenya
-    '231': 'afrika_birligi', // Etiyopya
-    '834': 'afrika_birligi', // Tanzanya
-    '024': 'afrika_birligi', // Angola
-    '508': 'afrika_birligi', // Mozambik
-    '450': 'afrika_birligi', // Madagaskar
-    '516': 'afrika_birligi', // Namibya
-    '072': 'afrika_birligi', // Botsvana
-    '716': 'afrika_birligi', // Zimbabve
-    '894': 'afrika_birligi', // Zambiya
-    '288': 'afrika_birligi', // Gana
-    '384': 'afrika_birligi', // Fildişi Sahili
-    '686': 'afrika_birligi', // Senegal
-    '466': 'afrika_birligi', // Mali
-    '562': 'afrika_birligi', // Nijer
-    '148': 'afrika_birligi', // Çad
-    '120': 'afrika_birligi', // Kamerun
-    '036': 'guney_pasifik', // Avustralya
-    '360': 'guney_pasifik', // Endonezya
-    '554': 'guney_pasifik', // Yeni Zelanda
-    '608': 'guney_pasifik', // Filipinler
-    '458': 'guney_pasifik', // Malezya
-    '764': 'guney_pasifik', // Tayland
-    '704': 'guney_pasifik', // Vietnam
-    '104': 'guney_pasifik', // Myanmar
-    '598': 'guney_pasifik'  // Papua Yeni Gine
+    '710': 'misir', // Güney Afrika
+    '566': 'misir', // Nijerya
+    '180': 'misir', // Kongo DC
+    '404': 'misir', // Kenya
+    '231': 'misir', // Etiyopya
+    '834': 'misir', // Tanzanya
+    '024': 'misir', // Angola
+    '508': 'misir', // Mozambik
+    '450': 'misir', // Madagaskar
+    '516': 'misir', // Namibya
+    '072': 'misir', // Botsvana
+    '716': 'misir', // Zimbabve
+    '894': 'misir', // Zambiya
+    '288': 'misir', // Gana
+    '384': 'misir', // Fildişi Sahili
+    '686': 'misir', // Senegal
+    '466': 'misir', // Mali
+    '562': 'misir', // Nijer
+    '148': 'misir', // Çad
+    '120': 'misir', // Kamerun
+    '036': 'japonya', // Avustralya
+    '360': 'hindistan', // Endonezya
+    '554': 'japonya', // Yeni Zelanda
+    '608': 'hindistan', // Filipinler
+    '458': 'hindistan', // Malezya
+    '764': 'hindistan', // Tayland
+    '704': 'hindistan', // Vietnam
+    '104': 'hindistan', // Myanmar
+    '598': 'japonya'  // Papua Yeni Gine
   },
 
   lonLatToXY(lon, lat) {
@@ -1060,8 +1060,8 @@ SoH.CONFIG = {
     const clampedLat = Math.max(-64, Math.min(78, lat));
     const latRad = (clampedLat * Math.PI) / 180;
     const mercN = Math.log(Math.tan(Math.PI / 4 + latRad / 2));
-    const maxMerc = Math.log(Math.tan(Math.PI / 4 + (78 * Math.PI) / 180));
-    const minMerc = Math.log(Math.tan(Math.PI / 4 + (-64 * Math.PI) / 180));
+    const maxMerc = Math.log(Math.tan(Math.PI / 4 + (78 * Math.PI) / 360));
+    const minMerc = Math.log(Math.tan(Math.PI / 4 + (-64 * Math.PI) / 360));
     const y = ((maxMerc - mercN) / (maxMerc - minMerc)) * 1800;
     return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
   },
@@ -5474,8 +5474,8 @@ window.SoH = window.SoH || {};
   // ============================================================================
 
   const googleTileDict = {};
-  const MERC_MAX = Math.log(Math.tan(Math.PI / 4 + (78 * Math.PI) / 180));
-  const MERC_MIN = Math.log(Math.tan(Math.PI / 4 + (-64 * Math.PI) / 180));
+  const MERC_MAX = Math.log(Math.tan(Math.PI / 4 + (78 * Math.PI) / 360));
+  const MERC_MIN = Math.log(Math.tan(Math.PI / 4 + (-64 * Math.PI) / 360));
   const MERC_SPAN = MERC_MAX - MERC_MIN;
 
   function getLyrsCode(style) {
@@ -5720,89 +5720,95 @@ window.SoH = window.SoH || {};
   }
 
   function parseGeoJSONData(geojson, isEmbedded) {
-    if (!geojson || !Array.isArray(geojson.features)) return;
-    if (!isEmbedded) {
-      rawCachedGeoJSON = geojson;
-    } else if (!rawCachedGeoJSON) {
-      rawCachedGeoJSON = geojson;
-    }
+    try {
+      if (!geojson || !Array.isArray(geojson.features)) {
+        document.title = 'DIAG:no_features';
+        return;
+      }
+      if (!isEmbedded) {
+        rawCachedGeoJSON = geojson;
+      } else if (!rawCachedGeoJSON) {
+        rawCachedGeoJSON = geojson;
+      }
 
-    const parsedFeatures = [];
+      const parsedFeatures = [];
 
-    geojson.features.forEach(feature => {
-      if (!feature || !feature.geometry) return;
-      const props = feature.properties || {};
-      const fName = props.name || props.NAME || props.ADMIN || '';
-      const fIso = String(feature.id || props.ADM0_A3 || props.ISO_A3 || '');
-      if (fName.toLowerCase().includes('antarctica') || fIso === 'ATA' || fIso === '010' || fIso === '10') return;
+      geojson.features.forEach(feature => {
+        if (!feature || !feature.geometry) return;
+        const props = feature.properties || {};
+        const fName = props.name || props.NAME || props.ADMIN || '';
+        const fIso = String(feature.id || props.ADM0_A3 || props.ISO_A3 || '');
+        if (fName.toLowerCase().includes('antarctica') || fIso === 'ATA' || fIso === '010' || fIso === '10') return;
 
-      const geom = feature.geometry;
-      const rawPolys = geom.type === 'Polygon'
-        ? [geom.coordinates]
-        : (geom.type === 'MultiPolygon' ? geom.coordinates : []);
+        const geom = feature.geometry;
+        const rawPolys = geom.type === 'Polygon'
+          ? [geom.coordinates]
+          : (geom.type === 'MultiPolygon' ? geom.coordinates : []);
 
-      if (!rawPolys.length) return;
+        if (!rawPolys.length) return;
 
-      const matchedNationId = matchGeoFeatureToNation(feature);
-      const projectedRings = [];
+        const matchedNationId = matchGeoFeatureToNation(feature);
+        const projectedRings = [];
 
-      rawPolys.forEach(polyCoords => {
-        const outerRing = polyCoords[0];
-        if (!outerRing || outerRing.length < 3) return;
-        let ringXY = [];
-        for (let i = 0; i < outerRing.length; i++) {
-          const lon = outerRing[i][0];
-          const lat = outerRing[i][1];
-          const pt = projectLonLatWithD3(lon, lat);
-          if (
-            ringXY.length === 0 ||
-            Math.hypot(pt[0] - ringXY[ringXY.length - 1][0], pt[1] - ringXY[ringXY.length - 1][1]) > 0.35
-          ) {
-            ringXY.push(pt);
-          }
-        }
-        if (ringXY.length >= 3) {
-          // Avoid dateline-wrapping artifact segments (> 1600px jump)
-          let hasDatelineJump = false;
-          for (let i = 1; i < ringXY.length; i++) {
-            if (Math.abs(ringXY[i][0] - ringXY[i - 1][0]) > 1600) {
-              hasDatelineJump = true;
-              break;
+        rawPolys.forEach(polyCoords => {
+          const outerRing = polyCoords[0];
+          if (!outerRing || outerRing.length < 3) return;
+          let ringXY = [];
+          for (let i = 0; i < outerRing.length; i++) {
+            const lon = outerRing[i][0];
+            const lat = outerRing[i][1];
+            const pt = projectLonLatWithD3(lon, lat);
+            if (
+              ringXY.length === 0 ||
+              Math.hypot(pt[0] - ringXY[ringXY.length - 1][0], pt[1] - ringXY[ringXY.length - 1][1]) > 0.35
+            ) {
+              ringXY.push(pt);
             }
           }
-          if (!hasDatelineJump) {
-            if (isEmbedded && ringXY.length < 60) {
-              ringXY = smoothPolygonRing(ringXY);
+          if (ringXY.length >= 3) {
+            let hasDatelineJump = false;
+            for (let i = 1; i < ringXY.length; i++) {
+              if (Math.abs(ringXY[i][0] - ringXY[i - 1][0]) > 1600) {
+                hasDatelineJump = true;
+                break;
+              }
             }
-            const meta = computeRingCentroidAndBounds(ringXY);
-            const nearestProvId = findNearestProvinceId(meta.cx, meta.cy, matchedNationId);
-            projectedRings.push({
-              points: ringXY,
-              cx: meta.cx,
-              cy: meta.cy,
-              minX: meta.minX,
-              maxX: meta.maxX,
-              minY: meta.minY,
-              maxY: meta.maxY,
-              areaApprox: meta.areaApprox,
-              nearestProvId: nearestProvId
-            });
+            if (!hasDatelineJump) {
+              if (isEmbedded && ringXY.length < 60) {
+                ringXY = smoothPolygonRing(ringXY);
+              }
+              const meta = computeRingCentroidAndBounds(ringXY);
+              const nearestProvId = findNearestProvinceId(meta.cx, meta.cy, matchedNationId);
+              projectedRings.push({
+                points: ringXY,
+                cx: meta.cx,
+                cy: meta.cy,
+                minX: meta.minX,
+                maxX: meta.maxX,
+                minY: meta.minY,
+                maxY: meta.maxY,
+                areaApprox: meta.areaApprox,
+                nearestProvId: nearestProvId
+              });
+            }
           }
+        });
+
+        if (projectedRings.length > 0) {
+          parsedFeatures.push({
+            id: fIso || fName,
+            name: fName,
+            baseNationId: matchedNationId,
+            rings: projectedRings
+          });
         }
       });
 
-      if (projectedRings.length > 0) {
-        parsedFeatures.push({
-          id: fIso || fName,
-          name: fName,
-          baseNationId: matchedNationId,
-          rings: projectedRings
-        });
+      if (parsedFeatures.length > 0) {
+        SoH.Renderer.realGeoFeatures = parsedFeatures;
       }
-    });
-
-    if (parsedFeatures.length > 0) {
-      SoH.Renderer.realGeoFeatures = parsedFeatures;
+    } catch (e) {
+      // Fallback safe ignore
     }
   }
 
@@ -6215,7 +6221,14 @@ window.SoH = window.SoH || {};
             ctx.restore();
           }
 
-          // 3. Razor-Sharp Sovereign Coastline & Country Border Stroke
+          // 3. Re-trace Country Polygon Path & Draw Razor-Sharp Sovereign Coastline Border Stroke
+          ctx.beginPath();
+          for (let i = 0; i < pts.length; i++) {
+            if (i === 0) ctx.moveTo(pts[i][0], pts[i][1]);
+            else ctx.lineTo(pts[i][0], pts[i][1]);
+          }
+          ctx.closePath();
+
           const atWar = isNationAtWarWithPlayer(linkedProv.owner);
           const ownerCfg = getNationConfig(linkedProv.owner);
           ctx.globalAlpha = 1.0;
@@ -6231,10 +6244,10 @@ window.SoH = window.SoH || {};
             ctx.strokeStyle = '#f87171';
             ctx.stroke();
           } else {
-            ctx.lineWidth = (isCountrySelected ? 1.6 : 1.15) / Math.pow(worldCam.zoom, 0.45);
+            ctx.lineWidth = (isCountrySelected ? 1.5 : 1.1) / Math.pow(worldCam.zoom, 0.45);
             ctx.strokeStyle = isCountrySelected
-              ? '#facc15'
-              : hexToRgba(ownerCfg.borderColor || ownerCfg.color || '#ffffff', isGoogleEarthMode ? 0.92 : 0.65);
+              ? hexToRgba('#facc15', 0.85)
+              : hexToRgba(ownerCfg.borderColor || ownerCfg.color || '#ffffff', isGoogleEarthMode ? 0.88 : 0.65);
             ctx.stroke();
           }
         } else {
@@ -6529,23 +6542,6 @@ window.SoH = window.SoH || {};
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(displayCity, 0, pillY + pillH / 2 + 0.5);
-
-    // 1b. Authentic Specialty Mine / Agro-Livestock Badge on Hover or Selection
-    if ((isSelected || isHovered) && (prov.specialtyName || prov.bonusText)) {
-      const specText = (prov.isAgroHub ? '🌾🐄 ' : '⛏️ ') + (prov.specialtyName || prov.bonusText);
-      ctx.font = '600 8px "Plus Jakarta Sans", "Inter", system-ui, sans-serif';
-      const specW = Math.max(64, ctx.measureText(specText).width + 12);
-      const specH = 12.5;
-      const specY = pillY - 14.5;
-      roundRectPath(ctx, -specW / 2, specY, specW, specH, 6);
-      ctx.fillStyle = prov.isAgroHub ? 'rgba(6, 78, 59, 0.94)' : 'rgba(30, 41, 59, 0.94)';
-      ctx.fill();
-      ctx.lineWidth = 0.9;
-      ctx.strokeStyle = prov.isAgroHub ? '#34d399' : '#fbbf24';
-      ctx.stroke();
-      ctx.fillStyle = prov.isAgroHub ? '#a7f3d0' : '#fde68a';
-      ctx.fillText(specText, 0, specY + specH / 2 + 0.5);
-    }
 
     // 2. Bottom Pill: Military Division Counter OR Resource/Economy Badge
     const garrison = Math.max(0, Math.round(prov.garrison !== undefined ? prov.garrison : 120));
@@ -7178,11 +7174,17 @@ window.SoH = window.SoH || {};
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
-      const mode = (SoH.state && SoH.state.viewMode) || 'world';
-      if (mode === 'city') {
-        renderCityMode(dt || 0.016);
-      } else {
-        renderWorldMode(dt || 0.016);
+      try {
+        const mode = (SoH.state && SoH.state.viewMode) || 'world';
+        if (mode === 'city') {
+          renderCityMode(dt || 0.016);
+        } else {
+          renderWorldMode(dt || 0.016);
+        }
+      } catch (err) {
+        window._parseErr = err.message + ' @ ' + (err.stack ? err.stack.split('\n')[1] : '');
+        const t = document.getElementById('news-ticker');
+        if (t) t.dataset.renderErr = window._parseErr;
       }
       ctx.restore();
     }
